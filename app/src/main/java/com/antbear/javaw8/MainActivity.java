@@ -27,6 +27,8 @@ public class MainActivity extends AppCompatActivity {
         loadFragment(homeFragment);
 
         bottomNavigationView = findViewById(R.id.bottom_navigation);
+        // Set Home as the default selected item
+        bottomNavigationView.setSelectedItemId(R.id.nav_home);
         bottomNavigationView.setOnItemSelectedListener(item -> {
             Fragment selectedFragment = null;
             int itemId = item.getItemId();
