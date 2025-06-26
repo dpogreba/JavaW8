@@ -87,6 +87,9 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
         return view;
     }
 
+    // Track added coffee shops for fallback decision
+    private int totalCoffeeShopsAdded = 0;
+    
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
@@ -326,22 +329,27 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
                 }
             })
             .addOnFailureListener(requireActivity(), new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    Log.e(TAG, "Error finding coffee shops: " + e.getMessage());
-                    Toast.makeText(requireContext(), "Unable to find coffee shops nearby", Toast.LENGTH_SHORT).show();
-                }
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.e(TAG, "Error finding coffee shops: " + e.getMessage());
+                        Toast.makeText(requireContext(), "Unable to find coffee shops nearby", Toast.LENGTH_SHORT).show();
+                        // Call fallback method when search fails
+                        addFallbackCoffeeShops();
+                    }
             });
     }
     
     private void processPredictions(FindAutocompletePredictionsResponse response) {
         if (response.getAutocompletePredictions().isEmpty()) {
+            Log.w(TAG, "No coffee shop predictions found, using fallbacks");
             Toast.makeText(requireContext(), "No coffee shops found nearby", Toast.LENGTH_SHORT).show();
+            addFallbackCoffeeShops();
             return;
         }
         
         // Limit to 10 places to avoid overwhelming the map
         int count = Math.min(10, response.getAutocompletePredictions().size());
+        Log.d(TAG, "Found " + count + " coffee shop predictions, fetching details");
         
         for (int i = 0; i < count; i++) {
             String placeId = response.getAutocompletePredictions().get(i).getPlaceId();
@@ -393,6 +401,9 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
         
         // Add the marker to the map
         mMap.addMarker(markerOptions);
+        
+        // Increment counter to track how many real coffee shops were added
+        totalCoffeeShopsAdded++;
     }
     
     private String getPlaceSnippet(Place place) {
