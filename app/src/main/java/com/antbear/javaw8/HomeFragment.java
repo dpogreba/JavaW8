@@ -366,8 +366,8 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
         // Convert drawable to BitmapDescriptor for map marker
         Drawable drawable = ContextCompat.getDrawable(requireContext(), R.drawable.ic_coffee);
         if (drawable == null) {
-            // Use default marker if drawable is not available
-            return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BROWN);
+            // Use default marker with orange color (closest to brown) if drawable is not available
+            return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE);
         }
         
         Canvas canvas = new Canvas();
