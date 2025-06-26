@@ -3,8 +3,8 @@
 
     <item
         android:id="@+id/nav_dashboard"
-        android:icon="@drawable/ic_dashboard"
-        android:title="@string/dashboard" />
+        android:icon="@drawable/ic_submit"
+        android:title="@string/submit" />
 
     <item
         android:id="@+id/nav_home"
@@ -13,7 +13,7 @@
 
     <item
         android:id="@+id/nav_notifications"
-        android:icon="@drawable/ic_notifications"
-        android:title="@string/notifications" />
+        android:icon="@drawable/ic_settings"
+        android:title="@string/settings" />
 
 </menu>
