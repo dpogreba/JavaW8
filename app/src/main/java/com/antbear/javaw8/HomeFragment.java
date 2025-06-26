@@ -1,11 +1,13 @@
 package com.antbear.javaw8;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -91,6 +93,33 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
         
         // Set custom info window
         mMap.setInfoWindowAdapter(this);
+        
+        // Set up info window click listener to open directions
+        mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+            @Override
+            public void onInfoWindowClick(@NonNull Marker marker) {
+                // Get the location of the coffee shop
+                LatLng position = marker.getPosition();
+                
+                // Create a URI for Google Maps directions
+                Uri gmmIntentUri = Uri.parse("google.navigation:q=" + position.latitude + "," + position.longitude + "&mode=d");
+                
+                // Create an Intent from gmmIntentUri
+                Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+                mapIntent.setPackage("com.google.android.apps.maps");
+                
+                // Check if Google Maps is installed
+                if (mapIntent.resolveActivity(requireActivity().getPackageManager()) != null) {
+                    startActivity(mapIntent);
+                } else {
+                    // If Google Maps isn't installed, open in browser
+                    Uri browserUri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=" + 
+                                             position.latitude + "," + position.longitude);
+                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, browserUri);
+                    startActivity(browserIntent);
+                }
+            }
+        });
         
         // Enable my location button if permission is granted
         enableMyLocation();
@@ -305,6 +334,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
                 Place.Field.NAME,
                 Place.Field.LAT_LNG,
                 Place.Field.ADDRESS,
+                Place.Field.PHONE_NUMBER,
                 Place.Field.RATING);
         
         // Construct a request object
@@ -351,6 +381,14 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
             snippet.append(place.getAddress());
         }
         
+        // Add phone number if available
+        if (place.getPhoneNumber() != null) {
+            if (snippet.length() > 0) {
+                snippet.append("\n");
+            }
+            snippet.append("Phone: ").append(place.getPhoneNumber());
+        }
+        
         // Add rating if available
         if (place.getRating() != null) {
             if (snippet.length() > 0) {
@@ -358,6 +396,12 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
             }
             snippet.append("Rating: ").append(place.getRating()).append(" ★");
         }
+        
+        // Add directions instruction
+        if (snippet.length() > 0) {
+            snippet.append("\n");
+        }
+        snippet.append("Tap to get directions");
         
         return snippet.toString();
     }
