@@ -6,6 +6,14 @@ pluginManagement {
     }
 }
 
+// Make buildscript repositories accessible to all scripts
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
