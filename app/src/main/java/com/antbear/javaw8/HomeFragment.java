@@ -118,8 +118,25 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
         
-        // Now that pins are showing, enable the custom info window adapter
-        mMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(requireContext()));
+        // Temporarily disable custom info window adapter to focus on pin visibility
+        // mMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(requireContext()));
+        
+        // Configure map settings for better visibility
+        mMap.getUiSettings().setZoomControlsEnabled(true);
+        mMap.getUiSettings().setMapToolbarEnabled(true);
+        
+        // Add debug marker to test basic marker functionality
+        LatLng testLocation = new LatLng(37.4220, -122.0841); // Mountain View, CA
+        Marker testMarker = mMap.addMarker(new MarkerOptions()
+                .position(testLocation)
+                .title("Test Marker")
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+        
+        if (testMarker != null) {
+            Log.d(TAG, "Test marker added successfully");
+        } else {
+            Log.e(TAG, "Failed to add test marker");
+        }
         
         // Set up info window click listener to open directions
         mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
@@ -407,20 +424,36 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     }
     
     private void addCoffeeShopMarker(Place place) {
-        if (place.getLatLng() == null) return;
+        if (place.getLatLng() == null) {
+            Log.e(TAG, "Cannot add marker for place with null LatLng: " + place.getName());
+            return;
+        }
         
         // Create a marker for this coffee shop
         MarkerOptions markerOptions = new MarkerOptions()
                 .position(place.getLatLng())
                 .title(place.getName())
                 .snippet(getPlaceSnippet(place))
-                .icon(getCoffeeMarkerIcon());
+                .icon(getCoffeeMarkerIcon())
+                .visible(true)  // Explicitly set visibility
+                .zIndex(1.0f);  // Place above other markers
         
         // Add the marker to the map
-        mMap.addMarker(markerOptions);
+        Marker marker = mMap.addMarker(markerOptions);
         
-        // Increment counter to track how many real coffee shops were added
-        totalCoffeeShopsAdded++;
+        if (marker != null) {
+            Log.d(TAG, "Successfully added marker for: " + place.getName() + 
+                  " at " + place.getLatLng().latitude + "," + place.getLatLng().longitude);
+            
+            // Center map on this marker if it's the first one added
+            if (totalCoffeeShopsAdded == 0) {
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(place.getLatLng(), 14));
+            }
+            
+            totalCoffeeShopsAdded++;
+        } else {
+            Log.e(TAG, "Failed to add marker for: " + place.getName());
+        }
     }
     
     private String getPlaceSnippet(Place place) {
@@ -458,36 +491,12 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     
     private BitmapDescriptor getCoffeeMarkerIcon() {
         try {
-            // First attempt with a simple colored marker to ensure pins appear
-            Log.d(TAG, "Creating coffee marker icon");
+            Log.d(TAG, "Creating coffee marker icon - using high visibility RED for testing");
             
-            // Use a coffee color for the markers - simple approach first to fix visibility
-            float hue = BitmapDescriptorFactory.HUE_ORANGE; // Coffee/brown color
-            BitmapDescriptor icon = BitmapDescriptorFactory.defaultMarker(hue);
-            
-            // Log success
-            Log.d(TAG, "Successfully created marker icon");
-            return icon;
-            
-            /* Temporarily disable vector drawable approach until we fix pin visibility
-            // Use our custom map marker with enhanced coffee cup icon
-            Drawable drawable = ContextCompat.getDrawable(requireContext(), R.drawable.map_marker_coffee);
-            if (drawable == null) {
-                Log.e(TAG, "Failed to load map_marker_coffee drawable");
-                return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE);
-            }
-            
-            // Convert vector drawable to bitmap
-            Canvas canvas = new Canvas();
-            Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
-                    drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
-            canvas.setBitmap(bitmap);
-            drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
-            drawable.draw(canvas);
-            return BitmapDescriptorFactory.fromBitmap(bitmap);
-            */
+            // Use RED for maximum visibility during testing
+            // This is a temporary change to diagnose pin visibility issues
+            return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
         } catch (Exception e) {
-            // Log any exceptions and fallback to default marker
             Log.e(TAG, "Error creating marker icon: " + e.getMessage());
             return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
         }
@@ -540,14 +549,25 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         Log.d(TAG, "Adding fallback coffee shop markers");
         Toast.makeText(requireContext(), "Using sample coffee shop locations", Toast.LENGTH_LONG).show();
         
+        // Force clear the map to ensure we don't have invisible markers
+        mMap.clear();
+        totalCoffeeShopsAdded = 0;
+        
         // Center point for our fallbacks - use user location if available, otherwise default
         LatLng center;
         if (lastKnownLocation != null) {
             center = new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
+            Log.d(TAG, "Using user's location as center for fallback markers: " + 
+                  center.latitude + "," + center.longitude);
         } else {
             // Default to Mountain View, CA
             center = new LatLng(37.4220, -122.0841);
+            Log.d(TAG, "Using default location as center for fallback markers: " + 
+                  center.latitude + "," + center.longitude);
         }
+        
+        // Move camera to show the area where markers will be placed
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(center, 14));
         
         // Add coffee shops around the center point
         addSampleCoffeeShop(
@@ -583,16 +603,27 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
      * Helper method to add a sample coffee shop marker
      */
     private void addSampleCoffeeShop(String name, LatLng location, String address, String phone, float rating) {
-        MarkerOptions markerOptions = new MarkerOptions()
-                .position(location)
-                .title(name)
-                .snippet(buildSnippet(address, phone, rating))
-                .icon(getCoffeeMarkerIcon());
-        
-        mMap.addMarker(markerOptions);
-        
-        // Log the sample coffee shop
-        Log.d(TAG, "Added sample coffee shop marker: " + name + " at " + location.latitude + "," + location.longitude);
+        try {
+            // Create a marker for this sample coffee shop
+            MarkerOptions markerOptions = new MarkerOptions()
+                    .position(location)
+                    .title(name)
+                    .snippet(buildSnippet(address, phone, rating))
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)) // Force RED for visibility
+                    .visible(true)  // Explicitly set visibility
+                    .zIndex(1.0f);  // Place above other markers
+            
+            Marker marker = mMap.addMarker(markerOptions);
+            
+            if (marker != null) {
+                Log.d(TAG, "Successfully added sample marker: " + name + " at " + location.latitude + "," + location.longitude);
+                totalCoffeeShopsAdded++;
+            } else {
+                Log.e(TAG, "Failed to add sample marker: " + name);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Exception adding sample marker: " + e.getMessage());
+        }
     }
     
     /**
