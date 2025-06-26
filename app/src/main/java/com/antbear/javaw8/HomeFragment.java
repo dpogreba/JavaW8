@@ -34,6 +34,7 @@ import com.antbear.javaw8.CoffeeShopInfoWindowAdapter;
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnFailureListener;
@@ -60,11 +61,20 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final double SEARCH_RADIUS_METERS = 2000; // 2 km radius
+    private static final double MIN_SEARCH_AREA_OVERLAP_THRESHOLD = 0.3; // 30% overlap
+    private static final long CAMERA_IDLE_DEBOUNCE_MS = 1000; // 1 second debounce for map movements
     
     private GoogleMap mMap;
     private FusedLocationProviderClient fusedLocationClient;
     private PlacesClient placesClient;
     private Location lastKnownLocation;
+    private LatLngBounds lastSearchedBounds; // Track the last area we searched
+    private boolean isSearchInProgress = false; // Flag to prevent overlapping searches
+    private Handler cameraIdleHandler = new Handler(Looper.getMainLooper());
+    private Runnable cameraIdleRunnable;
+    
+    // Set to keep track of place IDs to avoid duplicate markers
+    private final java.util.Set<String> addedPlaceIds = new java.util.HashSet<>();
 
     @Nullable
     @Override
@@ -130,6 +140,26 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         // Configure map settings for better visibility
         mMap.getUiSettings().setZoomControlsEnabled(true);
         mMap.getUiSettings().setMapToolbarEnabled(true);
+        
+        // Set up camera idle listener to update markers as user navigates the map
+        mMap.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
+            @Override
+            public void onCameraIdle() {
+                // Debounce rapid map movements using a handler
+                if (cameraIdleRunnable != null) {
+                    cameraIdleHandler.removeCallbacks(cameraIdleRunnable);
+                }
+                
+                cameraIdleRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        checkAndSearchVisibleArea();
+                    }
+                };
+                
+                cameraIdleHandler.postDelayed(cameraIdleRunnable, CAMERA_IDLE_DEBOUNCE_MS);
+            }
+        });
         
         // Add debug marker to test basic marker functionality
         LatLng testLocation = new LatLng(37.4220, -122.0841); // Mountain View, CA
@@ -233,9 +263,145 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         }
     }
     
+    /**
+     * Checks if we should search for coffee shops in the currently visible map area
+     */
+    private void checkAndSearchVisibleArea() {
+        // Only proceed if map is initialized and we're not already searching
+        if (mMap == null || isSearchInProgress) {
+            return;
+        }
+        
+        // Get current visible bounds
+        LatLngBounds currentBounds = mMap.getProjection().getVisibleRegion().latLngBounds;
+        
+        // Determine if we should search this new area
+        if (shouldSearchNewArea(currentBounds)) {
+            Log.d(TAG, "Map moved significantly, searching for coffee shops in the new area");
+            searchCoffeeShopsInBounds(currentBounds);
+        }
+    }
+    
+    /**
+     * Determines if we should search a new area based on how much it overlaps with previously searched area
+     */
+    private boolean shouldSearchNewArea(LatLngBounds newBounds) {
+        // If we haven't searched any area yet, definitely search
+        if (lastSearchedBounds == null) {
+            return true;
+        }
+        
+        // Calculate the overlap between the new bounds and the last searched bounds
+        LatLngBounds intersection = calculateIntersection(lastSearchedBounds, newBounds);
+        
+        // If there's no intersection, definitely search
+        if (intersection == null) {
+            return true;
+        }
+        
+        // Calculate the area of the intersection and the new bounds
+        double intersectionArea = calculateBoundsArea(intersection);
+        double newBoundsArea = calculateBoundsArea(newBounds);
+        
+        // Calculate the overlap ratio
+        double overlapRatio = intersectionArea / newBoundsArea;
+        
+        Log.d(TAG, "Map movement overlap ratio: " + overlapRatio);
+        
+        // If the overlap ratio is below our threshold, search the new area
+        return overlapRatio < MIN_SEARCH_AREA_OVERLAP_THRESHOLD;
+    }
+    
+    /**
+     * Calculate the intersection of two LatLngBounds
+     */
+    @Nullable
+    private LatLngBounds calculateIntersection(LatLngBounds bounds1, LatLngBounds bounds2) {
+        // Check if the bounds overlap
+        if (bounds1.northeast.latitude < bounds2.southwest.latitude || 
+            bounds1.southwest.latitude > bounds2.northeast.latitude ||
+            bounds1.northeast.longitude < bounds2.southwest.longitude || 
+            bounds1.southwest.longitude > bounds2.northeast.longitude) {
+            return null; // No intersection
+        }
+        
+        // Calculate the intersection
+        double southWestLat = Math.max(bounds1.southwest.latitude, bounds2.southwest.latitude);
+        double southWestLng = Math.max(bounds1.southwest.longitude, bounds2.southwest.longitude);
+        double northEastLat = Math.min(bounds1.northeast.latitude, bounds2.northeast.latitude);
+        double northEastLng = Math.min(bounds1.northeast.longitude, bounds2.northeast.longitude);
+        
+        return new LatLngBounds(
+                new LatLng(southWestLat, southWestLng),
+                new LatLng(northEastLat, northEastLng));
+    }
+    
+    /**
+     * Calculate the approximate area of a LatLngBounds
+     */
+    private double calculateBoundsArea(LatLngBounds bounds) {
+        double width = bounds.northeast.longitude - bounds.southwest.longitude;
+        double height = bounds.northeast.latitude - bounds.southwest.latitude;
+        return width * height;
+    }
+    
+    /**
+     * Search for coffee shops within specific bounds
+     */
+    private void searchCoffeeShopsInBounds(LatLngBounds bounds) {
+        // Mark that a search is in progress
+        isSearchInProgress = true;
+        
+        // Update the last searched bounds
+        lastSearchedBounds = bounds;
+        
+        // Calculate center point of the bounds for search origin
+        double centerLat = (bounds.northeast.latitude + bounds.southwest.latitude) / 2;
+        double centerLng = (bounds.northeast.longitude + bounds.southwest.longitude) / 2;
+        LatLng center = new LatLng(centerLat, centerLng);
+        
+        Log.d(TAG, "Searching for coffee shops in bounds: " + bounds.toString());
+        
+        // Create a request to find coffee shops in this area
+        FindAutocompletePredictionsRequest request = FindAutocompletePredictionsRequest.builder()
+                .setLocationBias(bounds)
+                .setOrigin(center)
+                .setTypeFilter(TypeFilter.ESTABLISHMENT)
+                .setQuery("coffee shop")
+                .build();
+        
+        placesClient.findAutocompletePredictions(request)
+                .addOnSuccessListener(requireActivity(), response -> {
+                    if (response.getAutocompletePredictions().isEmpty()) {
+                        Log.d(TAG, "No coffee shops found in this area");
+                    } else {
+                        // Process up to 10 places to avoid cluttering the map
+                        int count = Math.min(10, response.getAutocompletePredictions().size());
+                        Log.d(TAG, "Found " + count + " potential coffee shops in new area");
+                        
+                        for (int i = 0; i < count; i++) {
+                            String placeId = response.getAutocompletePredictions().get(i).getPlaceId();
+                            
+                            // Only fetch details if we haven't already added this place
+                            if (!addedPlaceIds.contains(placeId)) {
+                                fetchPlaceDetails(placeId);
+                            }
+                        }
+                    }
+                    
+                    // Mark search as complete
+                    isSearchInProgress = false;
+                })
+                .addOnFailureListener(requireActivity(), e -> {
+                    Log.e(TAG, "Error searching in new area: " + e.getMessage());
+                    isSearchInProgress = false;
+                });
+    }
+    
     private void searchNearbyCoffeeShops() {
         // Reset the counter each time we start a new search
         totalCoffeeShopsAdded = 0;
+        addedPlaceIds.clear();
         
         // Start fallback timer
         startFallbackTimer();
@@ -280,15 +446,20 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                 }
             })
             .addOnFailureListener(requireActivity(), new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    if (e instanceof ApiException) {
-                        ApiException apiException = (ApiException) e;
-                        Log.e(TAG, "Place not found: " + apiException.getStatusCode());
-                    }
-                    // As a fallback, use alternative search method
-                    searchCoffeeShopsNearby();
-                }
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        // Cancel any pending timers to prevent memory leaks
+        if (fallbackRunnable != null) {
+            fallbackHandler.removeCallbacks(fallbackRunnable);
+            fallbackRunnable = null;
+        }
+        
+        if (cameraIdleRunnable != null) {
+            cameraIdleHandler.removeCallbacks(cameraIdleRunnable);
+            cameraIdleRunnable = null;
+        }
+    }
             });
     }
     
@@ -415,6 +586,13 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                 @Override
                 public void onSuccess(FetchPlaceResponse response) {
                     Place place = response.getPlace();
+                    
+                    // Check if place has an ID and if we've already added it
+                    if (place.getId() != null) {
+                        // Add to our set of added place IDs to prevent duplicates
+                        addedPlaceIds.add(place.getId());
+                    }
+                    
                     addCoffeeShopMarker(place);
                 }
             })
@@ -588,6 +766,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         // Force clear the map to ensure we don't have invisible markers
         mMap.clear();
         totalCoffeeShopsAdded = 0;
+        addedPlaceIds.clear();
         
         // Center point for our fallbacks - use user location if available, otherwise default
         LatLng center;
