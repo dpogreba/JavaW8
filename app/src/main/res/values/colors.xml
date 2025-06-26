@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Coffee shop inspired colors -->
+    <color name="coffee_light">#D7CCC8</color>    <!-- Light coffee color -->
+    <color name="coffee_medium">#A1887F</color>   <!-- Medium coffee color -->
+    <color name="coffee_dark">#795548</color>     <!-- Dark coffee color -->
+    <color name="cream_light">#F5F5DC</color>     <!-- Light cream color -->
+    <color name="cream_medium">#E6E2D3</color>    <!-- Medium cream color -->
+    <color name="accent_caramel">#D4A76A</color>  <!-- Caramel accent color -->
+    
+    <!-- Keep original colors for compatibility -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
