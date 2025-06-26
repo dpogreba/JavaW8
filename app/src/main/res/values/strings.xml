@@ -6,4 +6,15 @@
     <string name="submit">Submit</string>
     <string name="settings">Settings</string>
     <string name="maps_api_key">AIzaSyBDLHnnEGKmaM4dvT5k895AvXnk0jBn_CE</string>
+    
+    <!-- Theme related strings -->
+    <string name="theme_title">Theme</string>
+    <string name="theme_system">System Default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    
+    <!-- Settings categories -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_location">Location</string>
+    <string name="settings_about">About</string>
 </resources>

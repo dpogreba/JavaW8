@@ -25,7 +25,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="App Preferences"
+            android:text="@string/settings_appearance"
             android:textColor="@android:color/darker_gray"
             android:textSize="14sp" />
 
@@ -41,32 +41,50 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Dark Mode Setting -->
-                <RelativeLayout
-                    android:id="@+id/dark_mode_setting"
+                <!-- Theme Setting -->
+                <LinearLayout
+                    android:id="@+id/theme_setting"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
+                    android:orientation="vertical"
                     android:padding="16dp">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_alignParentStart="true"
-                        android:layout_centerVertical="true"
-                        android:layout_toStartOf="@id/dark_mode_switch"
-                        android:text="Dark Mode"
-                        android:textSize="16sp" />
+                        android:text="@string/theme_title"
+                        android:textSize="16sp"
+                        android:layout_marginBottom="8dp" />
 
-                    <androidx.appcompat.widget.SwitchCompat
-                        android:id="@+id/dark_mode_switch"
-                        android:layout_width="wrap_content"
+                    <RadioGroup
+                        android:id="@+id/theme_radio_group"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_alignParentEnd="true"
-                        android:layout_centerVertical="true" />
-                </RelativeLayout>
+                        android:orientation="vertical">
+
+                        <RadioButton
+                            android:id="@+id/theme_system"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/theme_system"
+                            android:checked="true"
+                            android:paddingVertical="4dp" />
+
+                        <RadioButton
+                            android:id="@+id/theme_light"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/theme_light"
+                            android:paddingVertical="4dp" />
+
+                        <RadioButton
+                            android:id="@+id/theme_dark"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/theme_dark"
+                            android:paddingVertical="4dp" />
+                    </RadioGroup>
+                </LinearLayout>
 
                 <View
                     android:layout_width="match_parent"
@@ -108,7 +126,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Location"
+            android:text="@string/settings_location"
             android:textColor="@android:color/darker_gray"
             android:textSize="14sp" />
 
@@ -170,7 +188,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="About"
+            android:text="@string/settings_about"
             android:textColor="@android:color/darker_gray"
             android:textSize="14sp" />
 

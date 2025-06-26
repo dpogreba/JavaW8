@@ -17,13 +17,30 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Configure signing with keystore
+    signingConfigs {
+        create("release") {
+            // Update these with your actual keystore details
+            storeFile = file("../JavaW8.jks")
+            storePassword = "your-keystore-password"
+            keyAlias = "key0"
+            keyPassword = "your-key-password"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        
+        // Adding debug signing for testing on device
+        debug {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
