@@ -30,6 +30,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import main.java.com.antbear.javaw8.CoffeeShopInfoWindowAdapter;
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
@@ -118,8 +119,13 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
         
-        // Temporarily disable custom info window adapter to focus on pin visibility
-        // mMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(requireContext()));
+        // Re-enable custom info window adapter now that pin visibility is fixed
+        try {
+            mMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(requireContext()));
+            Log.d(TAG, "Custom info window adapter set successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to set custom info window adapter: " + e.getMessage(), e);
+        }
         
         // Configure map settings for better visibility
         mMap.getUiSettings().setZoomControlsEnabled(true);
@@ -491,13 +497,43 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     
     private BitmapDescriptor getCoffeeMarkerIcon() {
         try {
-            Log.d(TAG, "Creating coffee marker icon - using high visibility RED for testing");
+            // Now that we've fixed visibility issues, let's implement the custom coffee marker
+            Log.d(TAG, "Creating custom coffee cup marker icon");
             
-            // Use RED for maximum visibility during testing
-            // This is a temporary change to diagnose pin visibility issues
-            return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
+            // Get the vector drawable resource
+            Drawable vectorDrawable = ContextCompat.getDrawable(requireContext(), R.drawable.map_marker_coffee);
+            if (vectorDrawable == null) {
+                Log.e(TAG, "Failed to load map_marker_coffee drawable - falling back to default");
+                return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
+            }
+            
+            // Set bounds for the drawable (important for proper scaling)
+            int width = vectorDrawable.getIntrinsicWidth();
+            int height = vectorDrawable.getIntrinsicHeight();
+            
+            if (width <= 0 || height <= 0) {
+                Log.e(TAG, "Invalid drawable dimensions - falling back to default");
+                return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
+            }
+            
+            // Create a bitmap with the correct dimensions
+            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            
+            // Create a canvas and draw the vector drawable onto it
+            Canvas canvas = new Canvas(bitmap);
+            vectorDrawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+            vectorDrawable.draw(canvas);
+            
+            // Create and return the bitmap descriptor
+            BitmapDescriptor descriptor = BitmapDescriptorFactory.fromBitmap(bitmap);
+            
+            // Log success
+            Log.d(TAG, "Successfully created custom coffee marker icon");
+            
+            return descriptor;
         } catch (Exception e) {
-            Log.e(TAG, "Error creating marker icon: " + e.getMessage());
+            // Log any exceptions and fallback to default marker
+            Log.e(TAG, "Error creating custom marker icon: " + e.getMessage(), e);
             return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
         }
     }
@@ -609,7 +645,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                     .position(location)
                     .title(name)
                     .snippet(buildSnippet(address, phone, rating))
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)) // Force RED for visibility
+                    .icon(getCoffeeMarkerIcon()) // Use the same custom coffee marker as real coffee shops
                     .visible(true)  // Explicitly set visibility
                     .zIndex(1.0f);  // Place above other markers
             

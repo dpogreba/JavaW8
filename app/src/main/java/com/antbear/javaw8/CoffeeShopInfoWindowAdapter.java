@@ -1,4 +1,4 @@
-package com.antbear.javaw8;
+package main.java.com.antbear.javaw8;
 
 import android.content.Context;
 import android.util.Log;
