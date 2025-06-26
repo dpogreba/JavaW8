@@ -109,15 +109,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         }
     }
     
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        // Cancel any pending fallback timer to prevent memory leaks
-        if (fallbackRunnable != null) {
-            fallbackHandler.removeCallbacks(fallbackRunnable);
-            fallbackRunnable = null;
-        }
-    }
+    // onDestroy moved to end of class
 
     // Track added coffee shops for fallback decision
     private int totalCoffeeShopsAdded = 0;
@@ -363,8 +355,14 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         Log.d(TAG, "Searching for coffee shops in bounds: " + bounds.toString());
         
         // Create a request to find coffee shops in this area
+        // Convert LatLngBounds to RectangularBounds which implements LocationBias
+        RectangularBounds rectangularBounds = RectangularBounds.newInstance(
+                bounds.southwest,
+                bounds.northeast
+        );
+        
         FindAutocompletePredictionsRequest request = FindAutocompletePredictionsRequest.builder()
-                .setLocationBias(bounds)
+                .setLocationBias(rectangularBounds)
                 .setOrigin(center)
                 .setTypeFilter(TypeFilter.ESTABLISHMENT)
                 .setQuery("coffee shop")
@@ -446,6 +444,15 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                 }
             })
             .addOnFailureListener(requireActivity(), new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    Log.e(TAG, "Error finding places: " + e.getMessage());
+                    Toast.makeText(requireContext(), "Error finding nearby coffee shops", Toast.LENGTH_SHORT).show();
+                    addFallbackCoffeeShops();
+                }
+            });
+    }
+    
     @Override
     public void onDestroy() {
         super.onDestroy();
@@ -459,8 +466,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             cameraIdleHandler.removeCallbacks(cameraIdleRunnable);
             cameraIdleRunnable = null;
         }
-    }
-            });
     }
     
     private void processCoffeeShops(FindCurrentPlaceResponse response) {
