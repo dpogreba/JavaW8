@@ -118,8 +118,9 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
         
-        // Set custom info window adapter
-        mMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(requireContext()));
+        // Use built-in info window adapter first to ensure pins appear
+        // We'll enable the custom adapter once we confirm pins are showing
+        // mMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(requireContext()));
         
         // Set up info window click listener to open directions
         mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
@@ -470,28 +471,40 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
     }
     
     private BitmapDescriptor getCoffeeMarkerIcon() {
-        // Use our custom map marker with enhanced coffee cup icon
-        Drawable drawable = ContextCompat.getDrawable(requireContext(), R.drawable.map_marker_coffee);
-        if (drawable == null) {
-            // Use default marker with coffee color if drawable is not available
-            return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE);
+        try {
+            // First attempt with a simple colored marker to ensure pins appear
+            Log.d(TAG, "Creating coffee marker icon");
+            
+            // Use a coffee color for the markers - simple approach first to fix visibility
+            float hue = BitmapDescriptorFactory.HUE_ORANGE; // Coffee/brown color
+            BitmapDescriptor icon = BitmapDescriptorFactory.defaultMarker(hue);
+            
+            // Log success
+            Log.d(TAG, "Successfully created marker icon");
+            return icon;
+            
+            /* Temporarily disable vector drawable approach until we fix pin visibility
+            // Use our custom map marker with enhanced coffee cup icon
+            Drawable drawable = ContextCompat.getDrawable(requireContext(), R.drawable.map_marker_coffee);
+            if (drawable == null) {
+                Log.e(TAG, "Failed to load map_marker_coffee drawable");
+                return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE);
+            }
+            
+            // Convert vector drawable to bitmap
+            Canvas canvas = new Canvas();
+            Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
+                    drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+            canvas.setBitmap(bitmap);
+            drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
+            drawable.draw(canvas);
+            return BitmapDescriptorFactory.fromBitmap(bitmap);
+            */
+        } catch (Exception e) {
+            // Log any exceptions and fallback to default marker
+            Log.e(TAG, "Error creating marker icon: " + e.getMessage());
+            return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
         }
-        
-        // Convert vector drawable to bitmap
-        Canvas canvas = new Canvas();
-        Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
-                drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
-        canvas.setBitmap(bitmap);
-        drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
-        drawable.draw(canvas);
-        
-        // Apply a slight bounce animation when adding markers
-        Handler handler = new Handler(Looper.getMainLooper());
-        handler.postDelayed(() -> {
-            // We would add animation code here in a real app
-        }, 100);
-        
-        return BitmapDescriptorFactory.fromBitmap(bitmap);
     }
     
     /**
