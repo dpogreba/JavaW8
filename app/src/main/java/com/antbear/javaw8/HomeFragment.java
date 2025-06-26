@@ -54,7 +54,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-public class HomeFragment extends Fragment implements OnMapReadyCallback, GoogleMap.InfoWindowAdapter {
+public class HomeFragment extends Fragment implements OnMapReadyCallback {
 
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
@@ -118,9 +118,8 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
         
-        // Use built-in info window adapter first to ensure pins appear
-        // We'll enable the custom adapter once we confirm pins are showing
-        // mMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(requireContext()));
+        // Now that pins are showing, enable the custom info window adapter
+        mMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(requireContext()));
         
         // Set up info window click listener to open directions
         mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
@@ -155,19 +154,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
         // Default location (in case permission is denied)
         LatLng defaultLocation = new LatLng(37.4220, -122.0841); // Mountain View, CA
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 12));
-    }
-    
-    // InfoWindowAdapter implementation
-    @Nullable
-    @Override
-    public View getInfoContents(@NonNull Marker marker) {
-        return null; // Use default info window contents
-    }
-
-    @Nullable
-    @Override
-    public View getInfoWindow(@NonNull Marker marker) {
-        return null; // Use default info window
     }
     
     private void enableMyLocation() {
