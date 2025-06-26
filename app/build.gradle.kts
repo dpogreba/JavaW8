@@ -42,9 +42,10 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     
-    // Google Maps dependencies
+    // Google Maps and Places dependencies
     implementation("com.google.android.gms:play-services-maps:18.1.0")
     implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.libraries.places:places:3.2.0")
     
     // Testing dependencies
     testImplementation("junit:junit:4.13.2")

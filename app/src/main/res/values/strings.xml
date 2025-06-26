@@ -3,4 +3,5 @@
     <string name="home">Home</string>
     <string name="dashboard">Dashboard</string>
     <string name="notifications">Notifications</string>
+    <string name="maps_api_key">AIzaSyBDLHnnEGKmaM4dvT5k895AvXnk0jBn_CE</string>
 </resources>
