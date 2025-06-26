@@ -9,6 +9,8 @@ import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -86,9 +88,31 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
         
         return view;
     }
+    
+    @Override
+    public void onPause() {
+        super.onPause();
+        // Cancel any pending fallback timer to prevent memory leaks
+        if (fallbackRunnable != null) {
+            fallbackHandler.removeCallbacks(fallbackRunnable);
+        }
+    }
+    
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        // Cancel any pending fallback timer to prevent memory leaks
+        if (fallbackRunnable != null) {
+            fallbackHandler.removeCallbacks(fallbackRunnable);
+            fallbackRunnable = null;
+        }
+    }
 
     // Track added coffee shops for fallback decision
     private int totalCoffeeShopsAdded = 0;
+    private static final int FALLBACK_TIMEOUT_MS = 5000; // 5 seconds
+    private Handler fallbackHandler = new Handler(Looper.getMainLooper());
+    private Runnable fallbackRunnable;
     
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
@@ -200,6 +224,12 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
     }
     
     private void searchNearbyCoffeeShops() {
+        // Reset the counter each time we start a new search
+        totalCoffeeShopsAdded = 0;
+        
+        // Start fallback timer
+        startFallbackTimer();
+        
         if (lastKnownLocation == null) {
             Log.e(TAG, "Last known location is null - cannot search for coffee shops");
             Toast.makeText(requireContext(), "Unable to get your location. Using fallback locations.", Toast.LENGTH_LONG).show();
@@ -455,6 +485,46 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback, Google
         drawable.draw(canvas);
         
         return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+    
+    /**
+     * Starts a timer that will add fallback coffee shops if no real ones are found
+     */
+    private void startFallbackTimer() {
+        // Cancel any existing fallback timer
+        if (fallbackRunnable != null) {
+            fallbackHandler.removeCallbacks(fallbackRunnable);
+        }
+        
+        // Create a new fallback runnable
+        fallbackRunnable = new Runnable() {
+            @Override
+            public void run() {
+                // Check if any coffee shops were added
+                if (totalCoffeeShopsAdded == 0) {
+                    Log.d(TAG, "Fallback timer triggered - no coffee shops were found after " + 
+                         (FALLBACK_TIMEOUT_MS/1000) + " seconds");
+                    
+                    // Only add fallbacks if we haven't added any coffee shops yet
+                    if (isAdded()) { // Make sure fragment is still attached
+                        requireActivity().runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                addFallbackCoffeeShops();
+                            }
+                        });
+                    }
+                } else {
+                    Log.d(TAG, "Fallback timer ignored - " + totalCoffeeShopsAdded + 
+                         " coffee shops were already added");
+                }
+            }
+        };
+        
+        // Schedule the fallback runnable
+        fallbackHandler.postDelayed(fallbackRunnable, FALLBACK_TIMEOUT_MS);
+        Log.d(TAG, "Fallback timer started - will check for markers in " + 
+             (FALLBACK_TIMEOUT_MS/1000) + " seconds");
     }
     
     /**
