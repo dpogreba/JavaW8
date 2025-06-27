@@ -38,9 +38,10 @@ android {
             )
         }
         
-        // Adding debug signing for testing on device
+        // Use default debug signing config for testing on device
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            // Default debug signing config is automatically applied
+            // No explicit signingConfig needed for debug
         }
     }
     compileOptions {
