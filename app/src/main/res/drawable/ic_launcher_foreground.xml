@@ -3,14 +3,126 @@
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
-    android:viewportHeight="108"
-    android:tint="#000000">
-  <group android:scaleX="2.61"
-      android:scaleY="2.61"
-      android:translateX="22.68"
-      android:translateY="22.68">
+    android:viewportHeight="108">
+  
+  <!-- Coffee cup and watch -->
+  <group android:scaleX="0.8"
+      android:scaleY="0.8"
+      android:translateX="10.8"
+      android:translateY="10.8">
+    
+    <!-- Coffee cup -->
     <path
-        android:fillColor="@android:color/white"
-        android:pathData="M17.65,6.35C16.2,4.9 14.21,4 12,4c-4.42,0 -7.99,3.58 -7.99,8s3.57,8 7.99,8c3.73,0 6.84,-2.55 7.73,-6h-2.08c-0.82,2.33 -3.04,4 -5.65,4 -3.31,0 -6,-2.69 -6,-6s2.69,-6 6,-6c1.66,0 3.14,0.69 4.22,1.78L13,11h7V4l-2.35,2.35z"/>
+        android:fillColor="#B37C51"
+        android:pathData="M30,28 L78,28 C82,28 86,32 86,36 L86,92 C86,96 82,100 78,100 L30,100 C26,100 22,96 22,92 L22,36 C22,32 26,28 30,28 Z" />
+    
+    <!-- Darker cup shading -->
+    <path
+        android:fillColor="#8B5A2B"
+        android:pathData="M54,28 L78,28 C82,28 86,32 86,36 L86,92 C86,96 82,100 78,100 L54,100 L54,28 Z" />
+    
+    <!-- Cup lid top -->
+    <path
+        android:fillColor="#B37C51"
+        android:pathData="M32,20 L76,20 L72,28 L36,28 Z" />
+    
+    <!-- Cup lid top shading -->
+    <path
+        android:fillColor="#8B5A2B"
+        android:pathData="M54,20 L76,20 L72,28 L54,28 Z" />
+    
+    <!-- Lid bump -->
+    <path
+        android:fillColor="#8B5A2B"
+        android:pathData="M50,18 L58,18 L58,20 L50,20 Z" />
+    
+    <!-- Cup bands -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,35 L84,35 L84,38 L24,38 Z" />
+    
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,45 L84,45 L84,48 L24,48 Z" />
+    
+    <!-- Watch face background -->
+    <path
+        android:fillColor="#2980B9"
+        android:pathData="M32,54 L76,54 L76,74 L32,74 Z" />
+    
+    <!-- Watch face darker side -->
+    <path
+        android:fillColor="#1C5D8A"
+        android:pathData="M54,54 L76,54 L76,74 L54,74 Z" />
+    
+    <!-- Watch face circle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#DDDDDD"
+        android:strokeWidth="1"
+        android:pathData="M54,64 C54,58 49,53 43,53 C37,53 32,58 32,64 C32,70 37,75 43,75 C49,75 54,70 54,64 Z" />
+    
+    <!-- Watch face border -->
+    <path
+        android:fillColor="#3498DB"
+        android:strokeColor="#2980B9"
+        android:strokeWidth="2"
+        android:pathData="M52,64 C52,59 48,55 43,55 C38,55 34,59 34,64 C34,69 38,73 43,73 C48,73 52,69 52,64 Z" />
+    
+    <!-- Watch face -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,64 C50,60 47,57 43,57 C39,57 36,60 36,64 C36,68 39,71 43,71 C47,71 50,68 50,64 Z" />
+    
+    <!-- Hour marks -->
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M43,58 L43,59 L44,59 L44,58 Z" />
+    
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M43,69 L43,70 L44,70 L44,69 Z" />
+    
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M37,64 L38,64 L38,65 L37,65 Z" />
+    
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M48,64 L49,64 L49,65 L48,65 Z" />
+    
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M39,59.5 L40,60 L39.5,59 Z" />
+    
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M47,68.5 L46,68 L47,69 Z" />
+    
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M39,68.5 L40,68 L39,69 Z" />
+    
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M47,59.5 L46,60 L47,59 Z" />
+    
+    <!-- Watch hands -->
+    <path
+        android:fillColor="#3498DB"
+        android:strokeColor="#3498DB"
+        android:strokeWidth="1"
+        android:pathData="M43,64 L43,60" />
+    
+    <path
+        android:fillColor="#3498DB"
+        android:strokeColor="#3498DB"
+        android:strokeWidth="1"
+        android:pathData="M43,64 L47,64" />
+    
+    <!-- Center dot -->
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M43,64 C43,63.5 42.5,63 42,63 C41.5,63 41,63.5 41,64 C41,64.5 41.5,65 42,65 C42.5,65 43,64.5 43,64 Z" />
   </group>
 </vector>
