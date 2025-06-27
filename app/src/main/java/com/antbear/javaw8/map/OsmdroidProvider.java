@@ -3,9 +3,14 @@ package com.antbear.javaw8.map;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.ViewGroup;
+
+import com.antbear.javaw8.utils.ThreadUtils;
+import com.antbear.javaw8.utils.UiMessageHandler;
 
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
@@ -287,12 +292,15 @@ public class OsmdroidProvider implements MapProvider {
                     Log.e(TAG, "Overpass API request failed: " + e.getMessage(), e);
                     
                     if (listener != null) {
-                        // Make sure we call back on the main thread
-                        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-                        mainHandler.post(new Runnable() {
+                        // Use our thread utility to ensure main thread callback
+                        ThreadUtils.runOnMainThread(new Runnable() {
                             @Override
                             public void run() {
-                                listener.onPlacesError("Network error while searching for places");
+                                try {
+                                    listener.onPlacesError("Network error while searching for places");
+                                } catch (Exception ex) {
+                                    Log.e(TAG, "Error in onPlacesError callback: " + ex.getMessage(), ex);
+                                }
                             }
                         });
                     }
@@ -300,18 +308,20 @@ public class OsmdroidProvider implements MapProvider {
                 
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
-                    // Create a handler to post results to main thread
-                    android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-                    
                     if (!response.isSuccessful()) {
                         Log.e(TAG, "Overpass API error: " + response.code());
                         
                         if (listener != null) {
                             final int responseCode = response.code();
-                            mainHandler.post(new Runnable() {
+                            // Use our thread utility to ensure main thread callback
+                            ThreadUtils.runOnMainThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    listener.onPlacesError("Error from Overpass API: " + responseCode);
+                                    try {
+                                        listener.onPlacesError("Error from Overpass API: " + responseCode);
+                                    } catch (Exception ex) {
+                                        Log.e(TAG, "Error in onPlacesError callback: " + ex.getMessage(), ex);
+                                    }
                                 }
                             });
                         }
@@ -319,16 +329,24 @@ public class OsmdroidProvider implements MapProvider {
                     }
                     
                     try {
+                        // Get the response body
                         String responseBody = response.body().string();
+                        
+                        // Parse the response on the background thread
                         final List<PlaceInfo> places = parseOverpassResponse(responseBody);
                         
                         if (places.isEmpty()) {
                             if (listener != null) {
                                 final String queryText = query;
-                                mainHandler.post(new Runnable() {
+                                // Notify about no places found on the main thread
+                                ThreadUtils.runOnMainThread(new Runnable() {
                                     @Override
                                     public void run() {
-                                        listener.onPlacesError("No places found matching '" + queryText + "'");
+                                        try {
+                                            listener.onPlacesError("No places found matching '" + queryText + "'");
+                                        } catch (Exception ex) {
+                                            Log.e(TAG, "Error in onPlacesError callback: " + ex.getMessage(), ex);
+                                        }
                                     }
                                 });
                             }
@@ -339,10 +357,15 @@ public class OsmdroidProvider implements MapProvider {
                         final PlaceInfo[] placeArray = places.toArray(new PlaceInfo[0]);
                         
                         if (listener != null) {
-                            mainHandler.post(new Runnable() {
+                            // Deliver success callback on main thread
+                            ThreadUtils.runOnMainThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    listener.onPlacesFound(placeArray);
+                                    try {
+                                        listener.onPlacesFound(placeArray);
+                                    } catch (Exception ex) {
+                                        Log.e(TAG, "Error in onPlacesFound callback: " + ex.getMessage(), ex);
+                                    }
                                 }
                             });
                         }
@@ -350,10 +373,15 @@ public class OsmdroidProvider implements MapProvider {
                         Log.e(TAG, "Error parsing Overpass response: " + e.getMessage(), e);
                         
                         if (listener != null) {
-                            mainHandler.post(new Runnable() {
+                            // Deliver error callback on main thread
+                            ThreadUtils.runOnMainThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    listener.onPlacesError("Error processing search results");
+                                    try {
+                                        listener.onPlacesError("Error processing search results");
+                                    } catch (Exception ex) {
+                                        Log.e(TAG, "Error in onPlacesError callback: " + ex.getMessage(), ex);
+                                    }
                                 }
                             });
                         }
@@ -364,12 +392,15 @@ public class OsmdroidProvider implements MapProvider {
             Log.e(TAG, "Error building Overpass request: " + e.getMessage(), e);
             
             if (listener != null) {
-                // Make sure we call back on the main thread
-                android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-                mainHandler.post(new Runnable() {
+                // Use our thread utility to ensure main thread callback
+                ThreadUtils.runOnMainThread(new Runnable() {
                     @Override
                     public void run() {
-                        listener.onPlacesError("Error preparing search request");
+                        try {
+                            listener.onPlacesError("Error preparing search request");
+                        } catch (Exception ex) {
+                            Log.e(TAG, "Error in onPlacesError callback: " + ex.getMessage(), ex);
+                        }
                     }
                 });
             }

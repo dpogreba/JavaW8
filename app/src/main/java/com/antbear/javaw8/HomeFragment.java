@@ -14,6 +14,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import com.antbear.javaw8.utils.ThreadUtils;
+import com.antbear.javaw8.utils.UiMessageHandler;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
@@ -93,22 +96,7 @@ public class HomeFragment extends Fragment {
      * Shows a toast message safely on the main thread
      */
     private void showToast(final String message, final int duration) {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            // Already on main thread, show directly
-            if (isAdded() && getContext() != null) {
-                Toast.makeText(getContext(), message, duration).show();
-            }
-        } else {
-            // Post to main thread
-            mainHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (isAdded() && getContext() != null) {
-                        Toast.makeText(getContext(), message, duration).show();
-                    }
-                }
-            });
-        }
+        UiMessageHandler.showToastFromFragment(this, message, duration);
     }
     
     /**
@@ -290,12 +278,9 @@ public class HomeFragment extends Fragment {
             new MapProvider.OnPlacesFoundListener() {
                 @Override
                 public void onPlacesFound(final PlaceInfo[] places) {
-                    mainHandler.post(new Runnable() {
+                    UiMessageHandler.runOnUiThreadIfFragmentAlive(HomeFragment.this, new UiMessageHandler.UiCallback() {
                         @Override
-                        public void run() {
-                            // Safety check for fragment still attached
-                            if (!isAdded()) return;
-                            
+                        public void onUiThread() {
                             if (places.length > 0) {
                                 for (PlaceInfo place : places) {
                                     addPlaceMarker(place);
@@ -311,9 +296,9 @@ public class HomeFragment extends Fragment {
                 @Override
                 public void onPlacesError(final String errorMessage) {
                     Log.e(TAG, "Error finding places: " + errorMessage);
-                    mainHandler.post(new Runnable() {
+                    UiMessageHandler.runOnUiThreadIfFragmentAlive(HomeFragment.this, new UiMessageHandler.UiCallback() {
                         @Override
-                        public void run() {
+                        public void onUiThread() {
                             handlePlacesError(errorMessage);
                         }
                     });
@@ -349,6 +334,7 @@ public class HomeFragment extends Fragment {
         
         // Clear any pending main handler callbacks
         mainHandler.removeCallbacksAndMessages(null);
+        ThreadUtils.removeAllCallbacks();
         
         // Clean up map provider resources
         if (mapProvider != null) {
@@ -375,16 +361,12 @@ public class HomeFragment extends Fragment {
                          (FALLBACK_TIMEOUT_MS/1000) + " seconds");
                     
                     // Only add fallbacks if we haven't added any coffee shops yet
-                    if (isAdded()) { // Make sure fragment is still attached
-                        mainHandler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                if (isAdded()) { // Double-check
-                                    addFallbackCoffeeShops();
-                                }
-                            }
-                        });
-                    }
+                    UiMessageHandler.runOnUiThreadIfFragmentAlive(HomeFragment.this, new UiMessageHandler.UiCallback() {
+                        @Override
+                        public void onUiThread() {
+                            addFallbackCoffeeShops();
+                        }
+                    });
                 } else {
                     Log.d(TAG, "Fallback timer ignored - " + totalCoffeeShopsAdded + 
                          " coffee shops were already added");
