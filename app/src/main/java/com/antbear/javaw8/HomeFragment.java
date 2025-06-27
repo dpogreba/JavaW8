@@ -84,11 +84,20 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         // Initialize the FusedLocationProviderClient
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
         
-        // Initialize Places API
-        if (!Places.isInitialized()) {
-            Places.initialize(requireContext(), getString(R.string.maps_api_key));
+        // Initialize Places API with detailed error logging
+        try {
+            if (!Places.isInitialized()) {
+                String apiKey = getString(R.string.maps_api_key);
+                Log.d(TAG, "Initializing Places API with key: " + (apiKey.length() > 5 ? 
+                      apiKey.substring(0, 4) + "..." : "invalid key"));
+                Places.initialize(requireContext(), apiKey);
+            }
+            placesClient = Places.createClient(requireContext());
+            Log.d(TAG, "Places client created successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize Places API: " + e.getMessage(), e);
+            Toast.makeText(requireContext(), "Error initializing Places API", Toast.LENGTH_LONG).show();
         }
-        placesClient = Places.createClient(requireContext());
         
         // Get the SupportMapFragment and request the Google Map asynchronously
         SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager()
@@ -446,8 +455,42 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             .addOnFailureListener(requireActivity(), new OnFailureListener() {
                 @Override
                 public void onFailure(@NonNull Exception e) {
-                    Log.e(TAG, "Error finding places: " + e.getMessage());
-                    Toast.makeText(requireContext(), "Error finding nearby coffee shops", Toast.LENGTH_SHORT).show();
+                    String errorMsg = "Error finding places";
+                    
+                    // Enhanced error logging
+                    if (e instanceof ApiException) {
+                        ApiException apiException = (ApiException) e;
+                        int statusCode = apiException.getStatusCode();
+                        Log.e(TAG, errorMsg + ": API Exception with status code: " + statusCode);
+                        
+                        // Provide more specific error messages based on status code
+                        switch (statusCode) {
+                            case 7: // NETWORK_ERROR
+                                errorMsg = "Network error - please check your connection";
+                                break;
+                            case 8: // INTERNAL_ERROR
+                                errorMsg = "Google Places API internal error";
+                                break;
+                            case 9: // INVALID_REQUEST
+                                errorMsg = "Invalid Places API request";
+                                break;
+                            case 13: // OPERATION_NOT_ALLOWED
+                                errorMsg = "Places API not enabled or API key issues";
+                                break;
+                            case 16: // API_KEY_INVALID
+                                errorMsg = "Invalid Google API key";
+                                break;
+                            case 17: // BILLING_DISABLED
+                                errorMsg = "Billing not enabled on Google Cloud Console";
+                                break;
+                            default:
+                                errorMsg = "Error finding places (code: " + statusCode + ")";
+                        }
+                    } else {
+                        Log.e(TAG, errorMsg + ": " + e.getMessage(), e);
+                    }
+                    
+                    Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_LONG).show();
                     addFallbackCoffeeShops();
                 }
             });
@@ -547,8 +590,22 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             .addOnFailureListener(requireActivity(), new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
-                        Log.e(TAG, "Error finding coffee shops: " + e.getMessage());
-                        Toast.makeText(requireContext(), "Unable to find coffee shops nearby", Toast.LENGTH_SHORT).show();
+                        String errorMsg = "Unable to find coffee shops nearby";
+                        
+                        // Enhanced error logging
+                        if (e instanceof ApiException) {
+                            ApiException apiException = (ApiException) e;
+                            int statusCode = apiException.getStatusCode();
+                            Log.e(TAG, "Error finding coffee shops: API Exception with status code: " + statusCode);
+                            
+                            if (statusCode == 16 || statusCode == 17 || statusCode == 13) {
+                                errorMsg = "API key or billing issue with Google Cloud Console";
+                            }
+                        } else {
+                            Log.e(TAG, "Error finding coffee shops: " + e.getMessage(), e);
+                        }
+                        
+                        Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_LONG).show();
                         // Call fallback method when search fails
                         addFallbackCoffeeShops();
                     }
@@ -606,7 +663,19 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                 public void onFailure(@NonNull Exception e) {
                     if (e instanceof ApiException) {
                         ApiException apiException = (ApiException) e;
-                        Log.e(TAG, "Place not found: " + apiException.getStatusCode());
+                        int statusCode = apiException.getStatusCode();
+                        Log.e(TAG, "Place not found: Status code: " + statusCode + 
+                             ", Message: " + apiException.getMessage());
+                        
+                        if (statusCode == 16) {
+                            Log.e(TAG, "CRITICAL: API key is invalid - Places API requests will fail");
+                        } else if (statusCode == 17) {
+                            Log.e(TAG, "CRITICAL: Billing is not enabled in Google Cloud Console");
+                        } else if (statusCode == 13) {
+                            Log.e(TAG, "CRITICAL: Places API is not enabled in Google Cloud Console");
+                        }
+                    } else {
+                        Log.e(TAG, "Error fetching place details: " + e.getMessage(), e);
                     }
                 }
             });
