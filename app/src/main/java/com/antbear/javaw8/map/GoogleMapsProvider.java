@@ -344,7 +344,7 @@ public class GoogleMapsProvider implements MapProvider, OnMapReadyCallback {
                         place.getLatLng().longitude,
                         place.getAddress(),
                         place.getPhoneNumber(),
-                        place.getRating(),
+                        place.getRating() != null ? place.getRating().floatValue() : null,
                         false
                 );
                 

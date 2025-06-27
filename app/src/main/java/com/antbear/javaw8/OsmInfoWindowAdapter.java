@@ -31,9 +31,8 @@ public class OsmInfoWindowAdapter extends InfoWindow {
         // Add click listener to the info window
         mView.setOnClickListener(v -> {
             // This will trigger the marker's OnMarkerClickListener
-            marker.onInfoWindowClose();
-            marker.showInfoWindow();
             marker.closeInfoWindow();
+            marker.showInfoWindow();
         });
     }
 
