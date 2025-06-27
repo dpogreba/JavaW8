@@ -191,17 +191,22 @@ public class OsmdroidProvider implements MapProvider {
             }
         });
         
-        marker.setInfoWindow(new OsmInfoWindow(mapView, marker, title, snippet, new OsmInfoWindow.InfoWindowClickListener() {
+        // Set custom info window
+        marker.setInfoWindow(new com.antbear.javaw8.OsmInfoWindowAdapter(mapView, marker, title, snippet));
+        
+        // Set info window click listener
+        marker.setOnMarkerClickListener(new Marker.OnMarkerClickListener() {
             @Override
-            public void onInfoWindowClick(Marker m) {
-                if (infoWindowClickListener != null) {
+            public boolean onMarkerClick(Marker m, MapView mapView) {
+                if (markerClickListener != null) {
                     String id = markerIds.get(m);
                     if (id != null) {
-                        infoWindowClickListener.onInfoWindowClick(id);
+                        return markerClickListener.onMarkerClick(id);
                     }
                 }
+                return false;
             }
-        }));
+        });
         
         // Add to the map
         mapView.getOverlays().add(marker);

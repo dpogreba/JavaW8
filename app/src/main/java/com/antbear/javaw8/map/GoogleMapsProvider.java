@@ -20,6 +20,7 @@ import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRe
 import com.google.android.libraries.places.api.net.FetchPlaceRequest;
 import com.google.android.libraries.places.api.net.PlacesClient;
 import com.google.android.gms.common.api.ApiException;
+import com.antbear.javaw8.CoffeeShopInfoWindowAdapter;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -170,6 +171,14 @@ public class GoogleMapsProvider implements MapProvider, OnMapReadyCallback {
                 return false;
             }
         });
+        
+        // Set custom info window adapter
+        try {
+            googleMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(context));
+            Log.d(TAG, "Custom info window adapter set successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to set custom info window adapter: " + e.getMessage(), e);
+        }
         
         // Set up info window click listener
         googleMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
