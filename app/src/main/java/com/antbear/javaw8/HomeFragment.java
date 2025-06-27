@@ -267,21 +267,36 @@ public class HomeFragment extends Fragment {
             new MapProvider.OnPlacesFoundListener() {
                 @Override
                 public void onPlacesFound(PlaceInfo[] places) {
-                    if (places.length > 0) {
-                        for (PlaceInfo place : places) {
-                            addPlaceMarker(place);
+                    // Always update UI on the main thread
+                    requireActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (places.length > 0) {
+                                for (PlaceInfo place : places) {
+                                    addPlaceMarker(place);
+                                }
+                                Toast.makeText(requireContext(), "Found " + places.length + " coffee shops", Toast.LENGTH_SHORT).show();
+                            } else {
+                                onPlacesError("No coffee shops found");
+                            }
                         }
-                        Toast.makeText(requireContext(), "Found " + places.length + " coffee shops", Toast.LENGTH_SHORT).show();
-                    } else {
-                        onPlacesError("No coffee shops found");
-                    }
+                    });
                 }
                 
                 @Override
                 public void onPlacesError(String errorMessage) {
                     Log.e(TAG, "Error finding places: " + errorMessage);
-                    Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show();
-                    addFallbackCoffeeShops();
+                    
+                    // Always update UI on the main thread
+                    requireActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (isAdded()) { // Check if fragment is still attached
+                                Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show();
+                                addFallbackCoffeeShops();
+                            }
+                        }
+                    });
                 }
             }
         );
