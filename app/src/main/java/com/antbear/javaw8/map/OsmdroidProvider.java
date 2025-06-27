@@ -182,34 +182,28 @@ public class OsmdroidProvider implements MapProvider {
             Log.e(TAG, "Error setting marker icon: " + e.getMessage());
         }
         
-        // Set up click listeners
-        marker.setOnMarkerClickListener(new Marker.OnMarkerClickListener() {
-            @Override
-            public boolean onMarkerClick(Marker m, MapView mapView) {
-                if (markerClickListener != null) {
-                    String id = markerIds.get(m);
-                    if (id != null) {
-                        return markerClickListener.onMarkerClick(id);
-                    }
-                }
-                return false;
-            }
-        });
-        
         // Set custom info window
         marker.setInfoWindow(new com.antbear.javaw8.OsmInfoWindowAdapter(mapView, marker, title, snippet));
         
-        // Set info window click listener
+        // Set up marker click listener
         marker.setOnMarkerClickListener(new Marker.OnMarkerClickListener() {
             @Override
             public boolean onMarkerClick(Marker m, MapView mapView) {
+                Log.d(TAG, "Marker clicked: " + title);
+                
+                // Show the info window for this marker
+                m.showInfoWindow();
+                
+                // Notify the listener if set
                 if (markerClickListener != null) {
                     String id = markerIds.get(m);
                     if (id != null) {
                         return markerClickListener.onMarkerClick(id);
                     }
                 }
-                return false;
+                
+                // Return true to indicate we've handled the event
+                return true;
             }
         });
         
