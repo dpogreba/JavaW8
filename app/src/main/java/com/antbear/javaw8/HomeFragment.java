@@ -21,7 +21,7 @@ import androidx.fragment.app.Fragment;
 
 import com.antbear.javaw8.map.MapFactory;
 import com.antbear.javaw8.map.MapProvider;
-import com.antbear.javaw8.map.MapTogglePreference;
+
 import com.antbear.javaw8.map.PlaceInfo;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
@@ -54,9 +54,8 @@ public class HomeFragment extends Fragment {
         // Initialize the FusedLocationProviderClient
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
         
-        // Initialize the appropriate map provider based on settings
-        boolean useGoogleMaps = MapTogglePreference.isUsingGoogleMaps(requireContext());
-        mapProvider = MapFactory.createMapProvider(requireContext(), useGoogleMaps);
+        // Initialize the map provider
+        mapProvider = MapFactory.createMapProvider(requireContext());
         
         // Set up map ready listener
         mapProvider.setOnMapReadyListener(new MapProvider.OnMapReadyListener() {

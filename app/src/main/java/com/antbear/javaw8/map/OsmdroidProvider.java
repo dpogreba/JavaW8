@@ -246,7 +246,7 @@ public class OsmdroidProvider implements MapProvider {
     }
     
     @Override
-    public void searchNearbyPlaces(String query, double latitude, double longitude, double radius,
+    public void searchNearbyPlaces(String query, double latitude, double longitude, double radius, 
                                  OnPlacesFoundListener listener) {
         if (!initialized) {
             if (listener != null) {
