@@ -287,43 +287,75 @@ public class OsmdroidProvider implements MapProvider {
                     Log.e(TAG, "Overpass API request failed: " + e.getMessage(), e);
                     
                     if (listener != null) {
-                        listener.onPlacesError("Network error while searching for places");
+                        // Make sure we call back on the main thread
+                        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                listener.onPlacesError("Network error while searching for places");
+                            }
+                        });
                     }
                 }
                 
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
+                    // Create a handler to post results to main thread
+                    android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                    
                     if (!response.isSuccessful()) {
                         Log.e(TAG, "Overpass API error: " + response.code());
                         
                         if (listener != null) {
-                            listener.onPlacesError("Error from Overpass API: " + response.code());
+                            final int responseCode = response.code();
+                            mainHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    listener.onPlacesError("Error from Overpass API: " + responseCode);
+                                }
+                            });
                         }
                         return;
                     }
                     
                     try {
                         String responseBody = response.body().string();
-                        List<PlaceInfo> places = parseOverpassResponse(responseBody);
+                        final List<PlaceInfo> places = parseOverpassResponse(responseBody);
                         
                         if (places.isEmpty()) {
                             if (listener != null) {
-                                listener.onPlacesError("No places found matching '" + query + "'");
+                                final String queryText = query;
+                                mainHandler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        listener.onPlacesError("No places found matching '" + queryText + "'");
+                                    }
+                                });
                             }
                             return;
                         }
                         
                         // Convert to array
-                        PlaceInfo[] placeArray = places.toArray(new PlaceInfo[0]);
+                        final PlaceInfo[] placeArray = places.toArray(new PlaceInfo[0]);
                         
                         if (listener != null) {
-                            listener.onPlacesFound(placeArray);
+                            mainHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    listener.onPlacesFound(placeArray);
+                                }
+                            });
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "Error parsing Overpass response: " + e.getMessage(), e);
                         
                         if (listener != null) {
-                            listener.onPlacesError("Error processing search results");
+                            mainHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    listener.onPlacesError("Error processing search results");
+                                }
+                            });
                         }
                     }
                 }
@@ -332,7 +364,14 @@ public class OsmdroidProvider implements MapProvider {
             Log.e(TAG, "Error building Overpass request: " + e.getMessage(), e);
             
             if (listener != null) {
-                listener.onPlacesError("Error preparing search request");
+                // Make sure we call back on the main thread
+                android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        listener.onPlacesError("Error preparing search request");
+                    }
+                });
             }
         }
     }
