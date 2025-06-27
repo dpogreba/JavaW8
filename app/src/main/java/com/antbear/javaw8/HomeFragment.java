@@ -43,6 +43,9 @@ public class HomeFragment extends Fragment {
     private Handler cameraIdleHandler = new Handler(Looper.getMainLooper());
     private Runnable cameraIdleRunnable;
     
+    // Handler for safe UI operations
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    
     // Map to track marker IDs
     private final Map<String, String> markerTitleById = new HashMap<>();
 
@@ -85,6 +88,28 @@ public class HomeFragment extends Fragment {
     private static final int FALLBACK_TIMEOUT_MS = 5000; // 5 seconds
     private Handler fallbackHandler = new Handler(Looper.getMainLooper());
     private Runnable fallbackRunnable;
+    
+    /**
+     * Shows a toast message safely on the main thread
+     */
+    private void showToast(final String message, final int duration) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            // Already on main thread, show directly
+            if (isAdded() && getContext() != null) {
+                Toast.makeText(getContext(), message, duration).show();
+            }
+        } else {
+            // Post to main thread
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (isAdded() && getContext() != null) {
+                        Toast.makeText(getContext(), message, duration).show();
+                    }
+                }
+            });
+        }
+    }
     
     /**
      * Set up the map after it's ready
@@ -201,9 +226,7 @@ public class HomeFragment extends Fragment {
                 enableMyLocation();
             } else {
                 // Permission denied
-                Toast.makeText(requireContext(), 
-                    "Location permission is required to show your location on the map", 
-                    Toast.LENGTH_LONG).show();
+                showToast("Location permission is required to show your location on the map", Toast.LENGTH_LONG);
             }
         } else {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -240,7 +263,7 @@ public class HomeFragment extends Fragment {
         
         if (lastKnownLocation == null) {
             Log.e(TAG, "Last known location is null - cannot search for coffee shops");
-            Toast.makeText(requireContext(), "Unable to get your location. Using fallback locations.", Toast.LENGTH_LONG).show();
+            showToast("Unable to get your location. Using fallback locations.", Toast.LENGTH_LONG);
             addFallbackCoffeeShops();
             return;
         }
@@ -248,13 +271,13 @@ public class HomeFragment extends Fragment {
         if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
             ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "Location permission not granted");
-            Toast.makeText(requireContext(), "Location permission required to find nearby coffee shops", Toast.LENGTH_LONG).show();
+            showToast("Location permission required to find nearby coffee shops", Toast.LENGTH_LONG);
             addFallbackCoffeeShops();
             return;
         }
         
         // Show toast to let user know we're searching
-        Toast.makeText(requireContext(), "Searching for coffee shops nearby...", Toast.LENGTH_SHORT).show();
+        showToast("Searching for coffee shops nearby...", Toast.LENGTH_SHORT);
         Log.d(TAG, "Starting map search for coffee shops at: " + 
               lastKnownLocation.getLatitude() + ", " + lastKnownLocation.getLongitude());
         
@@ -266,40 +289,48 @@ public class HomeFragment extends Fragment {
             SEARCH_RADIUS_METERS,
             new MapProvider.OnPlacesFoundListener() {
                 @Override
-                public void onPlacesFound(PlaceInfo[] places) {
-                    // Always update UI on the main thread
-                    requireActivity().runOnUiThread(new Runnable() {
+                public void onPlacesFound(final PlaceInfo[] places) {
+                    mainHandler.post(new Runnable() {
                         @Override
                         public void run() {
+                            // Safety check for fragment still attached
+                            if (!isAdded()) return;
+                            
                             if (places.length > 0) {
                                 for (PlaceInfo place : places) {
                                     addPlaceMarker(place);
                                 }
-                                Toast.makeText(requireContext(), "Found " + places.length + " coffee shops", Toast.LENGTH_SHORT).show();
+                                showToast("Found " + places.length + " coffee shops", Toast.LENGTH_SHORT);
                             } else {
-                                onPlacesError("No coffee shops found");
+                                handlePlacesError("No coffee shops found");
                             }
                         }
                     });
                 }
                 
                 @Override
-                public void onPlacesError(String errorMessage) {
+                public void onPlacesError(final String errorMessage) {
                     Log.e(TAG, "Error finding places: " + errorMessage);
-                    
-                    // Always update UI on the main thread
-                    requireActivity().runOnUiThread(new Runnable() {
+                    mainHandler.post(new Runnable() {
                         @Override
                         public void run() {
-                            if (isAdded()) { // Check if fragment is still attached
-                                Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show();
-                                addFallbackCoffeeShops();
-                            }
+                            handlePlacesError(errorMessage);
                         }
                     });
                 }
             }
         );
+    }
+
+    /**
+     * Handle error from places search
+     */
+    private void handlePlacesError(String errorMessage) {
+        // Safety check for fragment still attached
+        if (!isAdded()) return;
+
+        showToast(errorMessage, Toast.LENGTH_SHORT);
+        addFallbackCoffeeShops();
     }
     
     @Override
@@ -315,6 +346,9 @@ public class HomeFragment extends Fragment {
             cameraIdleHandler.removeCallbacks(cameraIdleRunnable);
             cameraIdleRunnable = null;
         }
+        
+        // Clear any pending main handler callbacks
+        mainHandler.removeCallbacksAndMessages(null);
         
         // Clean up map provider resources
         if (mapProvider != null) {
@@ -342,10 +376,12 @@ public class HomeFragment extends Fragment {
                     
                     // Only add fallbacks if we haven't added any coffee shops yet
                     if (isAdded()) { // Make sure fragment is still attached
-                        requireActivity().runOnUiThread(new Runnable() {
+                        mainHandler.post(new Runnable() {
                             @Override
                             public void run() {
-                                addFallbackCoffeeShops();
+                                if (isAdded()) { // Double-check
+                                    addFallbackCoffeeShops();
+                                }
                             }
                         });
                     }
@@ -367,7 +403,7 @@ public class HomeFragment extends Fragment {
      */
     private void addFallbackCoffeeShops() {
         Log.d(TAG, "Adding fallback coffee shop markers");
-        Toast.makeText(requireContext(), "Using sample coffee shop locations", Toast.LENGTH_LONG).show();
+        showToast("Using sample coffee shop locations", Toast.LENGTH_LONG);
         
         // Clear any existing markers
         markerTitleById.clear();
