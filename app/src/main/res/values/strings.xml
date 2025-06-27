@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">JavaW8</string>
     <string name="home">Home</string>
@@ -17,4 +18,11 @@
     <string name="settings_appearance">Appearance</string>
     <string name="settings_location">Location</string>
     <string name="settings_about">About</string>
+    
+    <!-- Map provider settings -->
+    <string name="map_provider_title">Map Provider</string>
+    <string name="map_provider_google">Google Maps (requires API key)</string>
+    <string name="map_provider_osm">OpenStreetMap (open source)</string>
+    <string name="map_provider_google_switch">Use Google Maps</string>
+    <string name="map_provider_restart">Map provider changes will take effect after restarting the app</string>
 </resources>

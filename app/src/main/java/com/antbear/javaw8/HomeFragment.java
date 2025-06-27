@@ -3,9 +3,6 @@ package com.antbear.javaw8;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
@@ -20,61 +17,34 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
-import com.google.android.gms.common.api.ApiException;
+import com.antbear.javaw8.map.MapFactory;
+import com.antbear.javaw8.map.MapProvider;
+import com.antbear.javaw8.map.MapTogglePreference;
+import com.antbear.javaw8.map.PlaceInfo;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.OnMapReadyCallback;
-import com.google.android.gms.maps.SupportMapFragment;
-import com.antbear.javaw8.CoffeeShopInfoWindowAdapter;
-import com.google.android.gms.maps.model.BitmapDescriptor;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.LatLngBounds;
-import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.android.libraries.places.api.Places;
-import com.google.android.libraries.places.api.model.Place;
-import com.google.android.libraries.places.api.model.PlaceLikelihood;
-import com.google.android.libraries.places.api.net.FindCurrentPlaceRequest;
-import com.google.android.libraries.places.api.net.FindCurrentPlaceResponse;
-import com.google.android.libraries.places.api.net.PlacesClient;
-import com.google.android.libraries.places.api.model.RectangularBounds;
-import com.google.android.libraries.places.api.model.TypeFilter;
-import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest;
-import com.google.android.libraries.places.api.net.FindAutocompletePredictionsResponse;
-import com.google.android.libraries.places.api.net.FetchPlaceRequest;
-import com.google.android.libraries.places.api.net.FetchPlaceResponse;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
-public class HomeFragment extends Fragment implements OnMapReadyCallback {
+public class HomeFragment extends Fragment {
 
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final double SEARCH_RADIUS_METERS = 2000; // 2 km radius
-    private static final double MIN_SEARCH_AREA_OVERLAP_THRESHOLD = 0.3; // 30% overlap
     private static final long CAMERA_IDLE_DEBOUNCE_MS = 1000; // 1 second debounce for map movements
     
-    private GoogleMap mMap;
+    private MapProvider mapProvider;
     private FusedLocationProviderClient fusedLocationClient;
-    private PlacesClient placesClient;
     private Location lastKnownLocation;
-    private LatLngBounds lastSearchedBounds; // Track the last area we searched
     private boolean isSearchInProgress = false; // Flag to prevent overlapping searches
     private Handler cameraIdleHandler = new Handler(Looper.getMainLooper());
     private Runnable cameraIdleRunnable;
     
-    // Set to keep track of place IDs to avoid duplicate markers
-    private final java.util.Set<String> addedPlaceIds = new java.util.HashSet<>();
+    // Map to track marker IDs
+    private final Map<String, String> markerTitleById = new HashMap<>();
 
     @Nullable
     @Override
@@ -84,27 +54,20 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         // Initialize the FusedLocationProviderClient
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
         
-        // Initialize Places API with detailed error logging
-        try {
-            if (!Places.isInitialized()) {
-                String apiKey = getString(R.string.maps_api_key);
-                Log.d(TAG, "Initializing Places API with key: " + (apiKey.length() > 5 ? 
-                      apiKey.substring(0, 4) + "..." : "invalid key"));
-                Places.initialize(requireContext(), apiKey);
-            }
-            placesClient = Places.createClient(requireContext());
-            Log.d(TAG, "Places client created successfully");
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to initialize Places API: " + e.getMessage(), e);
-            Toast.makeText(requireContext(), "Error initializing Places API", Toast.LENGTH_LONG).show();
-        }
+        // Initialize the appropriate map provider based on settings
+        boolean useGoogleMaps = MapTogglePreference.isUsingGoogleMaps(requireContext());
+        mapProvider = MapFactory.createMapProvider(requireContext(), useGoogleMaps);
         
-        // Get the SupportMapFragment and request the Google Map asynchronously
-        SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager()
-                .findFragmentById(R.id.map);
-        if (mapFragment != null) {
-            mapFragment.getMapAsync(this);
-        }
+        // Set up map ready listener
+        mapProvider.setOnMapReadyListener(new MapProvider.OnMapReadyListener() {
+            @Override
+            public void onMapReady() {
+                setupMap();
+            }
+        });
+        
+        // Create the map fragment
+        mapProvider.createMapFragment(getChildFragmentManager(), R.id.map_container);
         
         return view;
     }
@@ -117,8 +80,6 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             fallbackHandler.removeCallbacks(fallbackRunnable);
         }
     }
-    
-    // onDestroy moved to end of class
 
     // Track added coffee shops for fallback decision
     private int totalCoffeeShopsAdded = 0;
@@ -126,79 +87,15 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private Handler fallbackHandler = new Handler(Looper.getMainLooper());
     private Runnable fallbackRunnable;
     
-    @Override
-    public void onMapReady(@NonNull GoogleMap googleMap) {
-        mMap = googleMap;
-        
-        // Re-enable custom info window adapter now that pin visibility is fixed
-        try {
-            mMap.setInfoWindowAdapter(new CoffeeShopInfoWindowAdapter(requireContext()));
-            Log.d(TAG, "Custom info window adapter set successfully");
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to set custom info window adapter: " + e.getMessage(), e);
-        }
-        
-        // Configure map settings for better visibility
-        mMap.getUiSettings().setZoomControlsEnabled(true);
-        mMap.getUiSettings().setMapToolbarEnabled(true);
-        
-        // Set up camera idle listener to update markers as user navigates the map
-        mMap.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
-            @Override
-            public void onCameraIdle() {
-                // Debounce rapid map movements using a handler
-                if (cameraIdleRunnable != null) {
-                    cameraIdleHandler.removeCallbacks(cameraIdleRunnable);
-                }
-                
-                cameraIdleRunnable = new Runnable() {
-                    @Override
-                    public void run() {
-                        checkAndSearchVisibleArea();
-                    }
-                };
-                
-                cameraIdleHandler.postDelayed(cameraIdleRunnable, CAMERA_IDLE_DEBOUNCE_MS);
-            }
-        });
-        
-        // Add debug marker to test basic marker functionality
-        LatLng testLocation = new LatLng(37.4220, -122.0841); // Mountain View, CA
-        Marker testMarker = mMap.addMarker(new MarkerOptions()
-                .position(testLocation)
-                .title("Test Marker")
-                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
-        
-        if (testMarker != null) {
-            Log.d(TAG, "Test marker added successfully");
-        } else {
-            Log.e(TAG, "Failed to add test marker");
-        }
-        
+    /**
+     * Set up the map after it's ready
+     */
+    private void setupMap() {
         // Set up info window click listener to open directions
-        mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+        mapProvider.setOnInfoWindowClickListener(new MapProvider.OnInfoWindowClickListener() {
             @Override
-            public void onInfoWindowClick(@NonNull Marker marker) {
-                // Get the location of the coffee shop
-                LatLng position = marker.getPosition();
-                
-                // Create a URI for Google Maps directions
-                Uri gmmIntentUri = Uri.parse("google.navigation:q=" + position.latitude + "," + position.longitude + "&mode=d");
-                
-                // Create an Intent from gmmIntentUri
-                Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
-                mapIntent.setPackage("com.google.android.apps.maps");
-                
-                // Check if Google Maps is installed
-                if (mapIntent.resolveActivity(requireActivity().getPackageManager()) != null) {
-                    startActivity(mapIntent);
-                } else {
-                    // If Google Maps isn't installed, open in browser
-                    Uri browserUri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=" + 
-                                             position.latitude + "," + position.longitude);
-                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, browserUri);
-                    startActivity(browserIntent);
-                }
+            public void onInfoWindowClick(String markerId) {
+                openDirections(markerId);
             }
         });
         
@@ -206,37 +103,85 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         enableMyLocation();
         
         // Default location (in case permission is denied)
-        LatLng defaultLocation = new LatLng(37.4220, -122.0841); // Mountain View, CA
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 12));
+        double defaultLat = 37.4220;
+        double defaultLng = -122.0841; // Mountain View, CA
+        mapProvider.moveCamera(defaultLat, defaultLng, 12);
+        
+        // Add a test marker
+        mapProvider.addMarker(defaultLat, defaultLng, "Test Marker", "This is a test marker");
+    }
+    
+    /**
+     * Open directions to a marker location
+     */
+    private void openDirections(String markerId) {
+        // Get place info from marker ID
+        PlaceInfo place = getPlaceFromMarkerId(markerId);
+        if (place == null) return;
+        
+        // Create a URI for Google Maps directions
+        Uri gmmIntentUri = Uri.parse("google.navigation:q=" + place.getLatitude() + "," + place.getLongitude() + "&mode=d");
+        
+        // Create an Intent from gmmIntentUri
+        Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+        mapIntent.setPackage("com.google.android.apps.maps");
+        
+        // Check if Google Maps is installed
+        if (mapIntent.resolveActivity(requireActivity().getPackageManager()) != null) {
+            startActivity(mapIntent);
+        } else {
+            // If Google Maps isn't installed, open in browser
+            Uri browserUri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=" + 
+                                     place.getLatitude() + "," + place.getLongitude());
+            Intent browserIntent = new Intent(Intent.ACTION_VIEW, browserUri);
+            startActivity(browserIntent);
+        }
+    }
+    
+    /**
+     * Get place info from a marker ID
+     */
+    private PlaceInfo getPlaceFromMarkerId(String markerId) {
+        // In a real implementation, we would store and retrieve the actual PlaceInfo
+        // For simplicity, we're creating a dummy place with the stored title
+        String title = markerTitleById.get(markerId);
+        if (title == null) return null;
+        
+        return new PlaceInfo(
+            markerId,
+            title,
+            lastKnownLocation != null ? lastKnownLocation.getLatitude() : 37.4220,
+            lastKnownLocation != null ? lastKnownLocation.getLongitude() : -122.0841,
+            "123 Main St",
+            "555-123-4567",
+            4.5f,
+            true
+        );
     }
     
     private void enableMyLocation() {
         // Check if permission is granted
-        if (ActivityCompat.checkSelfPermission(requireContext(), 
+        boolean hasPermission = ActivityCompat.checkSelfPermission(requireContext(), 
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ActivityCompat.checkSelfPermission(requireContext(), 
-                Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            
+                Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        
+        if (hasPermission) {
             // Enable the my-location layer
-            mMap.setMyLocationEnabled(true);
+            mapProvider.enableMyLocation(true);
             
             // Get the user's last known location
             fusedLocationClient.getLastLocation()
-                .addOnSuccessListener(requireActivity(), new OnSuccessListener<Location>() {
-                    @Override
-                    public void onSuccess(Location location) {
-                        if (location != null) {
-                            // Save the user's last known location
-                            lastKnownLocation = location;
-                            
-                            // Got the user's location, center the map there
-                            LatLng userLocation = new LatLng(location.getLatitude(), 
-                                                           location.getLongitude());
-                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userLocation, 15));
-                            
-                            // Search for nearby coffee shops
-                            searchNearbyCoffeeShops();
-                        }
+                .addOnSuccessListener(requireActivity(), location -> {
+                    if (location != null) {
+                        // Save the user's last known location
+                        lastKnownLocation = location;
+                        
+                        // Got the user's location, center the map there
+                        mapProvider.moveCamera(location.getLatitude(), location.getLongitude(), 15);
+                        
+                        // Search for nearby coffee shops
+                        searchNearbyCoffeeShops();
                     }
                 });
         } else {
@@ -261,154 +206,35 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                     "Location permission is required to show your location on the map", 
                     Toast.LENGTH_LONG).show();
             }
+        } else {
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         }
     }
     
     /**
-     * Checks if we should search for coffee shops in the currently visible map area
+     * Add a marker for a place
      */
-    private void checkAndSearchVisibleArea() {
-        // Only proceed if map is initialized and we're not already searching
-        if (mMap == null || isSearchInProgress) {
-            return;
-        }
-        
-        // Get current visible bounds
-        LatLngBounds currentBounds = mMap.getProjection().getVisibleRegion().latLngBounds;
-        
-        // Determine if we should search this new area
-        if (shouldSearchNewArea(currentBounds)) {
-            Log.d(TAG, "Map moved significantly, searching for coffee shops in the new area");
-            searchCoffeeShopsInBounds(currentBounds);
-        }
-    }
-    
-    /**
-     * Determines if we should search a new area based on how much it overlaps with previously searched area
-     */
-    private boolean shouldSearchNewArea(LatLngBounds newBounds) {
-        // If we haven't searched any area yet, definitely search
-        if (lastSearchedBounds == null) {
-            return true;
-        }
-        
-        // Calculate the overlap between the new bounds and the last searched bounds
-        LatLngBounds intersection = calculateIntersection(lastSearchedBounds, newBounds);
-        
-        // If there's no intersection, definitely search
-        if (intersection == null) {
-            return true;
-        }
-        
-        // Calculate the area of the intersection and the new bounds
-        double intersectionArea = calculateBoundsArea(intersection);
-        double newBoundsArea = calculateBoundsArea(newBounds);
-        
-        // Calculate the overlap ratio
-        double overlapRatio = intersectionArea / newBoundsArea;
-        
-        Log.d(TAG, "Map movement overlap ratio: " + overlapRatio);
-        
-        // If the overlap ratio is below our threshold, search the new area
-        return overlapRatio < MIN_SEARCH_AREA_OVERLAP_THRESHOLD;
-    }
-    
-    /**
-     * Calculate the intersection of two LatLngBounds
-     */
-    @Nullable
-    private LatLngBounds calculateIntersection(LatLngBounds bounds1, LatLngBounds bounds2) {
-        // Check if the bounds overlap
-        if (bounds1.northeast.latitude < bounds2.southwest.latitude || 
-            bounds1.southwest.latitude > bounds2.northeast.latitude ||
-            bounds1.northeast.longitude < bounds2.southwest.longitude || 
-            bounds1.southwest.longitude > bounds2.northeast.longitude) {
-            return null; // No intersection
-        }
-        
-        // Calculate the intersection
-        double southWestLat = Math.max(bounds1.southwest.latitude, bounds2.southwest.latitude);
-        double southWestLng = Math.max(bounds1.southwest.longitude, bounds2.southwest.longitude);
-        double northEastLat = Math.min(bounds1.northeast.latitude, bounds2.northeast.latitude);
-        double northEastLng = Math.min(bounds1.northeast.longitude, bounds2.northeast.longitude);
-        
-        return new LatLngBounds(
-                new LatLng(southWestLat, southWestLng),
-                new LatLng(northEastLat, northEastLng));
-    }
-    
-    /**
-     * Calculate the approximate area of a LatLngBounds
-     */
-    private double calculateBoundsArea(LatLngBounds bounds) {
-        double width = bounds.northeast.longitude - bounds.southwest.longitude;
-        double height = bounds.northeast.latitude - bounds.southwest.latitude;
-        return width * height;
-    }
-    
-    /**
-     * Search for coffee shops within specific bounds
-     */
-    private void searchCoffeeShopsInBounds(LatLngBounds bounds) {
-        // Mark that a search is in progress
-        isSearchInProgress = true;
-        
-        // Update the last searched bounds
-        lastSearchedBounds = bounds;
-        
-        // Calculate center point of the bounds for search origin
-        double centerLat = (bounds.northeast.latitude + bounds.southwest.latitude) / 2;
-        double centerLng = (bounds.northeast.longitude + bounds.southwest.longitude) / 2;
-        LatLng center = new LatLng(centerLat, centerLng);
-        
-        Log.d(TAG, "Searching for coffee shops in bounds: " + bounds.toString());
-        
-        // Create a request to find coffee shops in this area
-        // Convert LatLngBounds to RectangularBounds which implements LocationBias
-        RectangularBounds rectangularBounds = RectangularBounds.newInstance(
-                bounds.southwest,
-                bounds.northeast
+    private void addPlaceMarker(PlaceInfo place) {
+        String markerId = mapProvider.addMarker(
+            place.getLatitude(),
+            place.getLongitude(),
+            place.getName(),
+            place.createSnippet()
         );
         
-        FindAutocompletePredictionsRequest request = FindAutocompletePredictionsRequest.builder()
-                .setLocationBias(rectangularBounds)
-                .setOrigin(center)
-                .setTypeFilter(TypeFilter.ESTABLISHMENT)
-                .setQuery("coffee shop")
-                .build();
-        
-        placesClient.findAutocompletePredictions(request)
-                .addOnSuccessListener(requireActivity(), response -> {
-                    if (response.getAutocompletePredictions().isEmpty()) {
-                        Log.d(TAG, "No coffee shops found in this area");
-                    } else {
-                        // Process up to 10 places to avoid cluttering the map
-                        int count = Math.min(10, response.getAutocompletePredictions().size());
-                        Log.d(TAG, "Found " + count + " potential coffee shops in new area");
-                        
-                        for (int i = 0; i < count; i++) {
-                            String placeId = response.getAutocompletePredictions().get(i).getPlaceId();
-                            
-                            // Only fetch details if we haven't already added this place
-                            if (!addedPlaceIds.contains(placeId)) {
-                                fetchPlaceDetails(placeId);
-                            }
-                        }
-                    }
-                    
-                    // Mark search as complete
-                    isSearchInProgress = false;
-                })
-                .addOnFailureListener(requireActivity(), e -> {
-                    Log.e(TAG, "Error searching in new area: " + e.getMessage());
-                    isSearchInProgress = false;
-                });
+        if (markerId != null) {
+            markerTitleById.put(markerId, place.getName());
+            totalCoffeeShopsAdded++;
+        }
     }
     
+    /**
+     * Search for coffee shops near the user's location
+     */
     private void searchNearbyCoffeeShops() {
         // Reset the counter each time we start a new search
         totalCoffeeShopsAdded = 0;
-        addedPlaceIds.clear();
+        markerTitleById.clear();
         
         // Start fallback timer
         startFallbackTimer();
@@ -430,70 +256,36 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         
         // Show toast to let user know we're searching
         Toast.makeText(requireContext(), "Searching for coffee shops nearby...", Toast.LENGTH_SHORT).show();
-        Log.d(TAG, "Starting Places API search for coffee shops at: " + 
+        Log.d(TAG, "Starting map search for coffee shops at: " + 
               lastKnownLocation.getLatitude() + ", " + lastKnownLocation.getLongitude());
         
-        // Use FindCurrentPlaceRequest to search for coffee shops nearby
-        List<Place.Field> placeFields = Arrays.asList(
-                Place.Field.NAME,
-                Place.Field.ID,
-                Place.Field.LAT_LNG,
-                Place.Field.ADDRESS,
-                Place.Field.RATING,
-                Place.Field.TYPES);
-        
-        FindCurrentPlaceRequest request = FindCurrentPlaceRequest.newInstance(placeFields);
-        
-        placesClient.findCurrentPlace(request)
-            .addOnSuccessListener(requireActivity(), new OnSuccessListener<FindCurrentPlaceResponse>() {
+        // Search for coffee shops near the user's location using the map provider
+        mapProvider.searchNearbyPlaces(
+            "coffee shop", 
+            lastKnownLocation.getLatitude(), 
+            lastKnownLocation.getLongitude(), 
+            SEARCH_RADIUS_METERS,
+            new MapProvider.OnPlacesFoundListener() {
                 @Override
-                public void onSuccess(FindCurrentPlaceResponse response) {
-                    // Process places with "cafe" type
-                    processCoffeeShops(response);
-                }
-            })
-            .addOnFailureListener(requireActivity(), new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    String errorMsg = "Error finding places";
-                    
-                    // Enhanced error logging
-                    if (e instanceof ApiException) {
-                        ApiException apiException = (ApiException) e;
-                        int statusCode = apiException.getStatusCode();
-                        Log.e(TAG, errorMsg + ": API Exception with status code: " + statusCode);
-                        
-                        // Provide more specific error messages based on status code
-                        switch (statusCode) {
-                            case 7: // NETWORK_ERROR
-                                errorMsg = "Network error - please check your connection";
-                                break;
-                            case 8: // INTERNAL_ERROR
-                                errorMsg = "Google Places API internal error";
-                                break;
-                            case 9: // INVALID_REQUEST
-                                errorMsg = "Invalid Places API request";
-                                break;
-                            case 13: // OPERATION_NOT_ALLOWED
-                                errorMsg = "Places API not enabled or API key issues";
-                                break;
-                            case 16: // API_KEY_INVALID
-                                errorMsg = "Invalid Google API key";
-                                break;
-                            case 17: // BILLING_DISABLED
-                                errorMsg = "Billing not enabled on Google Cloud Console";
-                                break;
-                            default:
-                                errorMsg = "Error finding places (code: " + statusCode + ")";
+                public void onPlacesFound(PlaceInfo[] places) {
+                    if (places.length > 0) {
+                        for (PlaceInfo place : places) {
+                            addPlaceMarker(place);
                         }
+                        Toast.makeText(requireContext(), "Found " + places.length + " coffee shops", Toast.LENGTH_SHORT).show();
                     } else {
-                        Log.e(TAG, errorMsg + ": " + e.getMessage(), e);
+                        onPlacesError("No coffee shops found");
                     }
-                    
-                    Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_LONG).show();
+                }
+                
+                @Override
+                public void onPlacesError(String errorMessage) {
+                    Log.e(TAG, "Error finding places: " + errorMessage);
+                    Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show();
                     addFallbackCoffeeShops();
                 }
-            });
+            }
+        );
     }
     
     @Override
@@ -509,284 +301,10 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             cameraIdleHandler.removeCallbacks(cameraIdleRunnable);
             cameraIdleRunnable = null;
         }
-    }
-    
-    private void processCoffeeShops(FindCurrentPlaceResponse response) {
-        boolean foundCoffeeShops = false;
-        int totalPlaces = 0;
-        int coffeeShops = 0;
         
-        // Process the results
-        for (PlaceLikelihood placeLikelihood : response.getPlaceLikelihoods()) {
-            totalPlaces++;
-            Place place = placeLikelihood.getPlace();
-            
-            // Check if this place is a coffee shop/cafe
-            if (isCoffeeShop(place)) {
-                coffeeShops++;
-                foundCoffeeShops = true;
-                addCoffeeShopMarker(place);
-                Log.d(TAG, "Added coffee shop marker: " + place.getName() + 
-                      " at " + place.getLatLng().latitude + "," + place.getLatLng().longitude);
-            }
-        }
-        
-        Log.d(TAG, "Found " + totalPlaces + " total places, " + coffeeShops + " coffee shops");
-        
-        if (!foundCoffeeShops) {
-            Log.w(TAG, "No coffee shops found in current place results, trying wider search");
-            // If no coffee shops found in the immediate vicinity, try a wider search
-            searchCoffeeShopsNearby();
-        } else {
-            Toast.makeText(requireContext(), "Found " + coffeeShops + " coffee shops nearby", 
-                           Toast.LENGTH_SHORT).show();
-        }
-    }
-    
-    private boolean isCoffeeShop(Place place) {
-        List<Place.Type> placeTypes = place.getTypes();
-        if (placeTypes == null) return false;
-        
-        // Check for place types typically associated with coffee shops
-        return placeTypes.contains(Place.Type.CAFE) || 
-               placeTypes.contains(Place.Type.RESTAURANT) && place.getName().toLowerCase().contains("coffee");
-    }
-    
-    private void searchCoffeeShopsNearby() {
-        if (lastKnownLocation == null) return;
-        
-        // This method uses FindAutocompletePredictionsRequest as an alternative approach
-        // to find coffee shops when FindCurrentPlace doesn't return the expected results
-        
-        // Calculate bounds for the search area
-        double latDelta = SEARCH_RADIUS_METERS / 111000.0; // approximate meters to degrees
-        double lngDelta = SEARCH_RADIUS_METERS / (111000.0 * Math.cos(Math.toRadians(lastKnownLocation.getLatitude())));
-        
-        LatLng southwest = new LatLng(
-                lastKnownLocation.getLatitude() - latDelta,
-                lastKnownLocation.getLongitude() - lngDelta);
-        LatLng northeast = new LatLng(
-                lastKnownLocation.getLatitude() + latDelta,
-                lastKnownLocation.getLongitude() + lngDelta);
-        
-        RectangularBounds bounds = RectangularBounds.newInstance(southwest, northeast);
-        
-        // Create a request to find coffee shops
-        FindAutocompletePredictionsRequest request = FindAutocompletePredictionsRequest.builder()
-                .setLocationBias(bounds)
-                .setOrigin(new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude()))
-                .setTypeFilter(TypeFilter.ESTABLISHMENT)
-                .setQuery("coffee shop")
-                .build();
-        
-        placesClient.findAutocompletePredictions(request)
-            .addOnSuccessListener(requireActivity(), new OnSuccessListener<FindAutocompletePredictionsResponse>() {
-                @Override
-                public void onSuccess(FindAutocompletePredictionsResponse response) {
-                    // Process the predictions and fetch details for each place
-                    processPredictions(response);
-                }
-            })
-            .addOnFailureListener(requireActivity(), new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        String errorMsg = "Unable to find coffee shops nearby";
-                        
-                        // Enhanced error logging
-                        if (e instanceof ApiException) {
-                            ApiException apiException = (ApiException) e;
-                            int statusCode = apiException.getStatusCode();
-                            Log.e(TAG, "Error finding coffee shops: API Exception with status code: " + statusCode);
-                            
-                            if (statusCode == 16 || statusCode == 17 || statusCode == 13) {
-                                errorMsg = "API key or billing issue with Google Cloud Console";
-                            }
-                        } else {
-                            Log.e(TAG, "Error finding coffee shops: " + e.getMessage(), e);
-                        }
-                        
-                        Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_LONG).show();
-                        // Call fallback method when search fails
-                        addFallbackCoffeeShops();
-                    }
-            });
-    }
-    
-    private void processPredictions(FindAutocompletePredictionsResponse response) {
-        if (response.getAutocompletePredictions().isEmpty()) {
-            Log.w(TAG, "No coffee shop predictions found, using fallbacks");
-            Toast.makeText(requireContext(), "No coffee shops found nearby", Toast.LENGTH_SHORT).show();
-            addFallbackCoffeeShops();
-            return;
-        }
-        
-        // Limit to 10 places to avoid overwhelming the map
-        int count = Math.min(10, response.getAutocompletePredictions().size());
-        Log.d(TAG, "Found " + count + " coffee shop predictions, fetching details");
-        
-        for (int i = 0; i < count; i++) {
-            String placeId = response.getAutocompletePredictions().get(i).getPlaceId();
-            fetchPlaceDetails(placeId);
-        }
-    }
-    
-    private void fetchPlaceDetails(String placeId) {
-        // Specify the fields to return
-        List<Place.Field> placeFields = Arrays.asList(
-                Place.Field.ID,
-                Place.Field.NAME,
-                Place.Field.LAT_LNG,
-                Place.Field.ADDRESS,
-                Place.Field.PHONE_NUMBER,
-                Place.Field.RATING);
-        
-        // Construct a request object
-        FetchPlaceRequest request = FetchPlaceRequest.newInstance(placeId, placeFields);
-        
-        placesClient.fetchPlace(request)
-            .addOnSuccessListener(requireActivity(), new OnSuccessListener<FetchPlaceResponse>() {
-                @Override
-                public void onSuccess(FetchPlaceResponse response) {
-                    Place place = response.getPlace();
-                    
-                    // Check if place has an ID and if we've already added it
-                    if (place.getId() != null) {
-                        // Add to our set of added place IDs to prevent duplicates
-                        addedPlaceIds.add(place.getId());
-                    }
-                    
-                    addCoffeeShopMarker(place);
-                }
-            })
-            .addOnFailureListener(requireActivity(), new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    if (e instanceof ApiException) {
-                        ApiException apiException = (ApiException) e;
-                        int statusCode = apiException.getStatusCode();
-                        Log.e(TAG, "Place not found: Status code: " + statusCode + 
-                             ", Message: " + apiException.getMessage());
-                        
-                        if (statusCode == 16) {
-                            Log.e(TAG, "CRITICAL: API key is invalid - Places API requests will fail");
-                        } else if (statusCode == 17) {
-                            Log.e(TAG, "CRITICAL: Billing is not enabled in Google Cloud Console");
-                        } else if (statusCode == 13) {
-                            Log.e(TAG, "CRITICAL: Places API is not enabled in Google Cloud Console");
-                        }
-                    } else {
-                        Log.e(TAG, "Error fetching place details: " + e.getMessage(), e);
-                    }
-                }
-            });
-    }
-    
-    private void addCoffeeShopMarker(Place place) {
-        if (place.getLatLng() == null) {
-            Log.e(TAG, "Cannot add marker for place with null LatLng: " + place.getName());
-            return;
-        }
-        
-        // Create a marker for this coffee shop
-        MarkerOptions markerOptions = new MarkerOptions()
-                .position(place.getLatLng())
-                .title(place.getName())
-                .snippet(getPlaceSnippet(place))
-                .icon(getCoffeeMarkerIcon())
-                .visible(true)  // Explicitly set visibility
-                .zIndex(1.0f);  // Place above other markers
-        
-        // Add the marker to the map
-        Marker marker = mMap.addMarker(markerOptions);
-        
-        if (marker != null) {
-            Log.d(TAG, "Successfully added marker for: " + place.getName() + 
-                  " at " + place.getLatLng().latitude + "," + place.getLatLng().longitude);
-            
-            // Center map on this marker if it's the first one added
-            if (totalCoffeeShopsAdded == 0) {
-                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(place.getLatLng(), 14));
-            }
-            
-            totalCoffeeShopsAdded++;
-        } else {
-            Log.e(TAG, "Failed to add marker for: " + place.getName());
-        }
-    }
-    
-    private String getPlaceSnippet(Place place) {
-        StringBuilder snippet = new StringBuilder();
-        
-        // Add address if available
-        if (place.getAddress() != null) {
-            snippet.append(place.getAddress());
-        }
-        
-        // Add phone number if available
-        if (place.getPhoneNumber() != null) {
-            if (snippet.length() > 0) {
-                snippet.append("\n");
-            }
-            snippet.append("Phone: ").append(place.getPhoneNumber());
-        }
-        
-        // Add rating if available
-        if (place.getRating() != null) {
-            if (snippet.length() > 0) {
-                snippet.append("\n");
-            }
-            snippet.append("Rating: ").append(place.getRating()).append(" ★");
-        }
-        
-        // Add directions instruction
-        if (snippet.length() > 0) {
-            snippet.append("\n");
-        }
-        snippet.append("Tap to get directions");
-        
-        return snippet.toString();
-    }
-    
-    private BitmapDescriptor getCoffeeMarkerIcon() {
-        try {
-            // Now that we've fixed visibility issues, let's implement the custom coffee marker
-            Log.d(TAG, "Creating custom coffee cup marker icon");
-            
-            // Get the vector drawable resource
-            Drawable vectorDrawable = ContextCompat.getDrawable(requireContext(), R.drawable.map_marker_coffee);
-            if (vectorDrawable == null) {
-                Log.e(TAG, "Failed to load map_marker_coffee drawable - falling back to default");
-                return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
-            }
-            
-            // Set bounds for the drawable (important for proper scaling)
-            int width = vectorDrawable.getIntrinsicWidth();
-            int height = vectorDrawable.getIntrinsicHeight();
-            
-            if (width <= 0 || height <= 0) {
-                Log.e(TAG, "Invalid drawable dimensions - falling back to default");
-                return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
-            }
-            
-            // Create a bitmap with the correct dimensions
-            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-            
-            // Create a canvas and draw the vector drawable onto it
-            Canvas canvas = new Canvas(bitmap);
-            vectorDrawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
-            vectorDrawable.draw(canvas);
-            
-            // Create and return the bitmap descriptor
-            BitmapDescriptor descriptor = BitmapDescriptorFactory.fromBitmap(bitmap);
-            
-            // Log success
-            Log.d(TAG, "Successfully created custom coffee marker icon");
-            
-            return descriptor;
-        } catch (Exception e) {
-            // Log any exceptions and fallback to default marker
-            Log.e(TAG, "Error creating custom marker icon: " + e.getMessage(), e);
-            return BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
+        // Clean up map provider resources
+        if (mapProvider != null) {
+            mapProvider.onDestroy();
         }
     }
     
@@ -837,105 +355,53 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         Log.d(TAG, "Adding fallback coffee shop markers");
         Toast.makeText(requireContext(), "Using sample coffee shop locations", Toast.LENGTH_LONG).show();
         
-        // Force clear the map to ensure we don't have invisible markers
-        mMap.clear();
+        // Clear any existing markers
+        markerTitleById.clear();
         totalCoffeeShopsAdded = 0;
-        addedPlaceIds.clear();
         
         // Center point for our fallbacks - use user location if available, otherwise default
-        LatLng center;
-        if (lastKnownLocation != null) {
-            center = new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
-            Log.d(TAG, "Using user's location as center for fallback markers: " + 
-                  center.latitude + "," + center.longitude);
-        } else {
-            // Default to Mountain View, CA
-            center = new LatLng(37.4220, -122.0841);
-            Log.d(TAG, "Using default location as center for fallback markers: " + 
-                  center.latitude + "," + center.longitude);
-        }
+        double centerLat = (lastKnownLocation != null) ? lastKnownLocation.getLatitude() : 37.4220;
+        double centerLng = (lastKnownLocation != null) ? lastKnownLocation.getLongitude() : -122.0841;
         
-        // Move camera to show the area where markers will be placed
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(center, 14));
+        // Move camera to this location
+        mapProvider.moveCamera(centerLat, centerLng, 14);
         
-        // Add coffee shops around the center point
-        addSampleCoffeeShop(
-                "JavaW8 Coffee House", 
-                new LatLng(center.latitude + 0.003, center.longitude + 0.003),
-                "123 Coffee Lane",
-                "555-123-4567",
-                4.8f);
+        // Add sample coffee shops around the center
+        addSampleCoffeeShop("JavaW8 Coffee House", 
+                centerLat + 0.003, centerLng + 0.003,
+                "123 Coffee Lane", "555-123-4567", 4.8f);
         
-        addSampleCoffeeShop(
-                "Brew & Bean", 
-                new LatLng(center.latitude - 0.002, center.longitude + 0.001),
-                "456 Espresso Ave",
-                "555-987-6543",
-                4.5f);
+        addSampleCoffeeShop("Brew & Bean", 
+                centerLat - 0.002, centerLng + 0.001,
+                "456 Espresso Ave", "555-987-6543", 4.5f);
         
-        addSampleCoffeeShop(
-                "Caffeine Corner", 
-                new LatLng(center.latitude + 0.001, center.longitude - 0.002),
-                "789 Latte Blvd",
-                "555-246-1357",
-                4.2f);
+        addSampleCoffeeShop("Caffeine Corner", 
+                centerLat + 0.001, centerLng - 0.002,
+                "789 Latte Blvd", "555-246-1357", 4.2f);
         
-        addSampleCoffeeShop(
-                "Mobile Mocha", 
-                new LatLng(center.latitude - 0.001, center.longitude - 0.001),
-                "321 Android St",
-                "555-369-8521",
-                4.7f);
+        addSampleCoffeeShop("Mobile Mocha", 
+                centerLat - 0.001, centerLng - 0.001,
+                "321 Android St", "555-369-8521", 4.7f);
     }
     
     /**
-     * Helper method to add a sample coffee shop marker
+     * Add a sample coffee shop marker with the specified details
      */
-    private void addSampleCoffeeShop(String name, LatLng location, String address, String phone, float rating) {
-        try {
-            // Create a marker for this sample coffee shop
-            MarkerOptions markerOptions = new MarkerOptions()
-                    .position(location)
-                    .title(name)
-                    .snippet(buildSnippet(address, phone, rating))
-                    .icon(getCoffeeMarkerIcon()) // Use the same custom coffee marker as real coffee shops
-                    .visible(true)  // Explicitly set visibility
-                    .zIndex(1.0f);  // Place above other markers
-            
-            Marker marker = mMap.addMarker(markerOptions);
-            
-            if (marker != null) {
-                Log.d(TAG, "Successfully added sample marker: " + name + " at " + location.latitude + "," + location.longitude);
-                totalCoffeeShopsAdded++;
-            } else {
-                Log.e(TAG, "Failed to add sample marker: " + name);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Exception adding sample marker: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Helper method to build the snippet for a sample coffee shop
-     */
-    private String buildSnippet(String address, String phone, float rating) {
-        StringBuilder snippet = new StringBuilder();
+    private void addSampleCoffeeShop(String name, double lat, double lng, 
+                                    String address, String phone, float rating) {
+        // Create a place info object for this sample coffee shop
+        PlaceInfo place = new PlaceInfo(
+            "sample_" + name.replace(" ", "_").toLowerCase(),
+            name,
+            lat,
+            lng,
+            address,
+            phone,
+            rating,
+            true // This is sample data
+        );
         
-        // Add address
-        snippet.append(address);
-        
-        // Add phone number
-        snippet.append("\nPhone: ").append(phone);
-        
-        // Add rating
-        snippet.append("\nRating: ").append(rating).append(" ★");
-        
-        // Add sample indicator
-        snippet.append("\n(Sample Data)");
-        
-        // Add directions instruction
-        snippet.append("\nTap to get directions");
-        
-        return snippet.toString();
+        // Add a marker for this place
+        addPlaceMarker(place);
     }
 }
