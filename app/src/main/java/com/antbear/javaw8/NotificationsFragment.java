@@ -26,7 +26,6 @@ public class NotificationsFragment extends Fragment {
     // Location related views
     private SeekBar searchRadiusSeekBar;
     private TextView searchRadiusValue;
-    private SwitchCompat mapProviderSwitch;
 
     @Nullable
     @Override
@@ -81,27 +80,6 @@ public class NotificationsFragment extends Fragment {
     }
     
     private void initLocationControls(View view) {
-        // Initialize map provider switch
-        mapProviderSwitch = view.findViewById(R.id.map_provider_switch);
-        
-        // Set initial state based on preference
-        boolean useGoogleMaps = MapTogglePreference.isUsingGoogleMaps(requireContext());
-        mapProviderSwitch.setChecked(useGoogleMaps);
-        
-        // Set listener for changes
-        mapProviderSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            MapTogglePreference.setUseGoogleMaps(requireContext(), isChecked);
-            
-            // Show toast to inform the user
-            String message = isChecked ? 
-                    "Using Google Maps (requires API key)" : 
-                    "Using OSM (open source, no API key)";
-            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
-            
-            // Inform user that changes will take effect after restart
-            Toast.makeText(requireContext(), "Restart the app to apply changes", Toast.LENGTH_LONG).show();
-        });
-        
         // Initialize location controls
         searchRadiusSeekBar = view.findViewById(R.id.search_radius_seekbar);
         searchRadiusValue = view.findViewById(R.id.search_radius_value);

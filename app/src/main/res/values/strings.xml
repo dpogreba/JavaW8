@@ -19,10 +19,6 @@
     <string name="settings_location">Location</string>
     <string name="settings_about">About</string>
     
-    <!-- Map provider settings -->
-    <string name="map_provider_title">Map Provider</string>
-    <string name="map_provider_google">Google Maps (requires API key)</string>
-    <string name="map_provider_osm">OpenStreetMap (open source)</string>
-    <string name="map_provider_google_switch">Use Google Maps</string>
-    <string name="map_provider_restart">Map provider changes will take effect after restarting the app</string>
+    <!-- Map provider info -->
+    <string name="map_provider_info">Using OpenStreetMap (open source)</string>
 </resources>
