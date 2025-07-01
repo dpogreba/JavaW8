@@ -85,26 +85,44 @@ public class GoogleMapsProvider implements MapProvider {
     
     @Override
     public Fragment createMapFragment(FragmentManager fragmentManager, int containerId) {
-        // Create a new SupportMapFragment
-        mapFragment = SupportMapFragment.newInstance();
-        
-        // Add it to the container
-        FragmentTransaction transaction = fragmentManager.beginTransaction();
-        transaction.replace(containerId, mapFragment);
-        transaction.commit();
-        
-        // Get reference to the GoogleMap once it's created
-        mapFragment.getMapAsync(map -> {
-            googleMap = map;
-            setupMap();
+        try {
+            // Create a new SupportMapFragment
+            mapFragment = SupportMapFragment.newInstance();
             
-            // Notify listener
-            if (mapReadyListener != null) {
-                mapReadyListener.onMapReady();
-            }
-        });
-        
-        return mapFragment;
+            // Add it to the container
+            FragmentTransaction transaction = fragmentManager.beginTransaction();
+            transaction.replace(containerId, mapFragment);
+            transaction.commitNow(); // Use commitNow to ensure immediate execution
+            
+            // Get reference to the GoogleMap once it's created
+            mapFragment.getMapAsync(map -> {
+                try {
+                    googleMap = map;
+                    Log.d(TAG, "GoogleMap instance received successfully");
+                    setupMap();
+                    
+                    // Notify listener
+                    if (mapReadyListener != null) {
+                        mapReadyListener.onMapReady();
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error setting up GoogleMap: " + e.getMessage(), e);
+                }
+            });
+            
+            return mapFragment;
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating map fragment: " + e.getMessage(), e);
+            
+            // Return an empty fragment as fallback
+            Fragment fallbackFragment = new Fragment();
+            FragmentTransaction fallbackTransaction = fragmentManager.beginTransaction();
+            fallbackTransaction.replace(containerId, fallbackFragment);
+            fallbackTransaction.commitNow();
+            
+            // We'll still return our non-functional mapFragment so other code won't crash
+            return fallbackFragment;
+        }
     }
     
     private void setupMap() {
