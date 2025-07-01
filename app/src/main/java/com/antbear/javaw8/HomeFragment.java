@@ -90,7 +90,7 @@ public class HomeFragment extends Fragment {
 
     // Track added coffee shops for fallback decision
     private int totalCoffeeShopsAdded = 0;
-    private static final int FALLBACK_TIMEOUT_MS = 15000; // 15 seconds - increased to give API more time
+    private static final int FALLBACK_TIMEOUT_MS = 30000; // 30 seconds - extended further to give API more time on slow networks
     private Handler fallbackHandler = new Handler(Looper.getMainLooper());
     private Runnable fallbackRunnable;
     

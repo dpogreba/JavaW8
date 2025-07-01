@@ -11,6 +11,7 @@ import java.io.File;
 
 import androidx.preference.PreferenceManager;
 
+import com.antbear.javaw8.utils.NetworkUtils;
 import com.antbear.javaw8.utils.ThreadUtils;
 import com.antbear.javaw8.utils.UiMessageHandler;
 
@@ -653,6 +654,17 @@ public class OsmdroidProvider implements MapProvider {
     private void searchForCoffeeShops(double latitude, double longitude, double radius,
                                    OnPlacesFoundListener listener) {
         Log.d(TAG, "Performing enhanced coffee shop search");
+        
+        // Check network connectivity first
+        boolean networkAvailable = NetworkUtils.isNetworkAvailable(context);
+        if (!networkAvailable) {
+            Log.e(TAG, "Network not available, cannot perform coffee shop search");
+            if (listener != null) {
+                ThreadUtils.runOnMainThread(() -> 
+                    listener.onPlacesError("Network connection unavailable. Check your internet connection and try again."));
+            }
+            return;
+        }
         
         // Get all the queries we want to try
         List<String[]> queryList = getAdditionalCoffeeShopQueries();
