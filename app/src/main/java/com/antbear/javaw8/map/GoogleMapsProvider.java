@@ -323,7 +323,7 @@ public class GoogleMapsProvider implements MapProvider {
         }).addOnFailureListener(exception -> {
             Log.e(TAG, "Error finding places: " + exception.getMessage(), exception);
             
-            if (listener != null && !errorReported.getAndSet(true)) {
+            if (listener != null) {
                 ThreadUtils.runOnMainThread(() -> listener.onPlacesError("Error searching for places: " + exception.getMessage()));
             }
         });
