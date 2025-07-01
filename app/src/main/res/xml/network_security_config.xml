@@ -8,6 +8,7 @@
         <domain includeSubdomains="true">c.tile.openstreetmap.org</domain>
         <domain includeSubdomains="true">d.tile.openstreetmap.org</domain>
         <domain includeSubdomains="true">overpass-api.de</domain>
+        <domain includeSubdomains="true">nominatim.openstreetmap.org</domain>
     </domain-config>
     <!-- Trust user installed CA certificates -->
     <base-config cleartextTrafficPermitted="false">

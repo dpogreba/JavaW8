@@ -90,7 +90,7 @@ public class HomeFragment extends Fragment {
 
     // Track added coffee shops for fallback decision
     private int totalCoffeeShopsAdded = 0;
-    private static final int FALLBACK_TIMEOUT_MS = 5000; // 5 seconds
+    private static final int FALLBACK_TIMEOUT_MS = 15000; // 15 seconds - increased to give API more time
     private Handler fallbackHandler = new Handler(Looper.getMainLooper());
     private Runnable fallbackRunnable;
     
@@ -302,6 +302,13 @@ public class HomeFragment extends Fragment {
                 @Override
                 public void onPlacesError(final String errorMessage) {
                     Log.e(TAG, "Error finding places: " + errorMessage);
+                    
+                    // Log additional information to help debug network issues
+                    Log.e(TAG, "Network debug - Search parameters: latitude=" + 
+                          lastKnownLocation.getLatitude() + ", longitude=" + 
+                          lastKnownLocation.getLongitude() + ", radius=" + 
+                          SEARCH_RADIUS_METERS + " meters (" + SEARCH_RADIUS_MILES + " miles)");
+                    
                     UiMessageHandler.runOnUiThreadIfFragmentAlive(HomeFragment.this, new UiMessageHandler.UiCallback() {
                         @Override
                         public void onUiThread() {

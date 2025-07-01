@@ -718,16 +718,16 @@ public class OsmdroidProvider implements MapProvider {
                             // Parse the response
                             List<PlaceInfo> places = parseOverpassResponse(responseBody);
                             
-                            // Add the places to our map, avoiding duplicates
-                            for (PlaceInfo place : places) {
-                                String placeId = place.getId();
-                                
-                                // If this is a new place, add it
-                                if (!allFoundPlaces.containsKey(placeId)) {
-                                    allFoundPlaces.put(placeId, place);
-                                    Log.d(TAG, "Found coffee shop: " + place.getName() + " (" + tagKey + "=" + tagValue + ")");
-                                }
+                        // Add the places to our map, avoiding duplicates
+                        for (PlaceInfo place : places) {
+                            String placeId = place.getId();
+                            
+                            // If this is a new place, add it
+                            if (!allFoundPlaces.containsKey(placeId)) {
+                                allFoundPlaces.put(placeId, place);
+                                Log.d(TAG, "Found coffee shop: " + place.getName() + " (" + tagKey + "=" + tagValue + "), isSample=" + place.isSampleData());
                             }
+                        }
                             
                             // Check if all queries have completed
                             checkIfAllQueriesCompleted(pendingQueries, allFoundPlaces, errorReported, listener);
