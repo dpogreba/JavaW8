@@ -81,7 +81,7 @@ public class OsmInfoWindowAdapter extends InfoWindow {
                     } else if (line.startsWith("Rating:")) {
                         ratingView.setText(line);
                         hasRating = true;
-                    } else if (line.contains("(Sample Data)")) {
+                    } else if (line.equals("(Sample Data)")) {  // Exact match to avoid partial matches
                         sampleIndicator.setText("Sample data - real coffee shops may vary");
                         sampleIndicator.setVisibility(View.VISIBLE);
                         isSampleData = true;

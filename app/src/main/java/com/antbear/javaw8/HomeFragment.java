@@ -159,6 +159,10 @@ public class HomeFragment extends Fragment {
         String title = markerTitleById.get(markerId);
         if (title == null) return null;
         
+        // Check if this is a sample coffee shop by ID prefix
+        // Only sample coffee shops created with addSampleCoffeeShop should have this flag set to true
+        boolean isSample = markerId.startsWith("sample_");
+        
         return new PlaceInfo(
             markerId,
             title,
@@ -167,7 +171,7 @@ public class HomeFragment extends Fragment {
             "123 Main St",
             "555-123-4567",
             4.5f,
-            true
+            isSample
         );
     }
     

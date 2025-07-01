@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark mode variants of theme-aware text colors -->
+    <color name="info_window_text">@color/white</color>
+    <color name="info_window_secondary_text">#E0E0E0</color>
+    <color name="info_window_hint_text">#BBBBBB</color>
+</resources>
