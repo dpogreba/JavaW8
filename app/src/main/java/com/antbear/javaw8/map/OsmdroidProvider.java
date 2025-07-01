@@ -91,7 +91,7 @@ public class OsmdroidProvider implements MapProvider {
             // Set a detailed user agent string to avoid getting banned by tile servers
             String userAgent = appContext.getPackageName() + "/" + 
                                getAppVersionName(appContext) + " " +
-                               "osmdroid/" + org.osmdroid.library.BuildConfig.VERSION_NAME;
+                               "osmdroid/6.1.10"; // Hardcoded version instead of BuildConfig.VERSION_NAME
             org.osmdroid.config.Configuration.getInstance().setUserAgentValue(userAgent);
             
             // Set cache paths explicitly
@@ -212,8 +212,8 @@ public class OsmdroidProvider implements MapProvider {
             mapView.setBuiltInZoomControls(true);
             mapView.setTilesScaledToDpi(true);
             
-            // Enable hardware acceleration
-            mapView.setHardwareAccelerationEnabled(true);
+            // Hardware acceleration is enabled by default in newer Android versions
+            // mapView.setHardwareAccelerationEnabled(true); // Not available in this OSMdroid version
             
             // Enable tile downloading
             mapView.setUseDataConnection(true);
