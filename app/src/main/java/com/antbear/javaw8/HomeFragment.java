@@ -36,7 +36,9 @@ public class HomeFragment extends Fragment {
 
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
-    private static final double SEARCH_RADIUS_METERS = 5000; // 5 km radius - increased for better coverage
+    private static final double SEARCH_RADIUS_MILES = 3.0; // 3 mile radius
+    private static final double METERS_PER_MILE = 1609.34; // Conversion factor
+    private static final double SEARCH_RADIUS_METERS = SEARCH_RADIUS_MILES * METERS_PER_MILE; // Convert to meters for API
     private static final long CAMERA_IDLE_DEBOUNCE_MS = 1000; // 1 second debounce for map movements
     
     private MapProvider mapProvider;
@@ -268,8 +270,8 @@ public class HomeFragment extends Fragment {
             return;
         }
         
-        // Show toast to let user know we're searching
-        showToast("Searching for coffee shops nearby...", Toast.LENGTH_SHORT);
+        // Show toast to let user know we're searching (including the search radius in miles)
+        showToast("Searching for coffee shops within " + SEARCH_RADIUS_MILES + " miles...", Toast.LENGTH_SHORT);
         Log.d(TAG, "Starting map search for coffee shops at: " + 
               lastKnownLocation.getLatitude() + ", " + lastKnownLocation.getLongitude());
         
@@ -289,7 +291,7 @@ public class HomeFragment extends Fragment {
                                 for (PlaceInfo place : places) {
                                     addPlaceMarker(place);
                                 }
-                                showToast("Found " + places.length + " coffee shops", Toast.LENGTH_SHORT);
+                                showToast("Found " + places.length + " coffee shops within " + SEARCH_RADIUS_MILES + " miles", Toast.LENGTH_SHORT);
                             } else {
                                 handlePlacesError("No coffee shops found");
                             }
