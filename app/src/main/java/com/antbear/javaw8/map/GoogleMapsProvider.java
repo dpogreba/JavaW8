@@ -162,9 +162,20 @@ public class GoogleMapsProvider implements MapProvider {
                 .title(title)
                 .snippet(snippet);
         
-        // Set coffee icon if available
+        // Set marker color based on type
+        // Note: We can't use vector drawable directly with BitmapDescriptorFactory
+        // Use default marker with a color instead
         try {
-            options.icon(BitmapDescriptorFactory.fromResource(R.drawable.map_marker_coffee));
+            float markerHue = BitmapDescriptorFactory.HUE_AZURE; // Default color
+            
+            // Use brown color for coffee shops to match app theme
+            if (title != null && (title.toLowerCase().contains("coffee") || 
+                                  title.toLowerCase().contains("cafe") || 
+                                  title.toLowerCase().contains("espresso"))) {
+                markerHue = BitmapDescriptorFactory.HUE_ORANGE;
+            }
+            
+            options.icon(BitmapDescriptorFactory.defaultMarker(markerHue));
         } catch (Exception e) {
             Log.e(TAG, "Error setting marker icon: " + e.getMessage());
         }
