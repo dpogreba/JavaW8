@@ -369,10 +369,29 @@ public class OsmdroidProvider implements MapProvider {
             // Convert query to appropriate OSM tags
             String osmTag = getOsmTagForQuery(query);
             
-            // Build Overpass query
-            String overpassQuery = String.format(
+            // Get tag value to use in more specific queries
+            String osmTagValue = getOsmTagValueForQuery(query);
+            
+            // Build Overpass query based on tag type
+            String overpassQuery;
+            if (osmTag.equals("shop") && osmTagValue == null) {
+                // For generic shop searches
+                overpassQuery = String.format(
                     "[out:json];node[\"%s\"](around:%f,%f,%f);out;",
                     osmTag, radius, latitude, longitude);
+            } else if (osmTag.equals("name")) {
+                // For name-based searches (case insensitive)
+                overpassQuery = String.format(
+                    "[out:json];node[\"%s\"~\"%s\",i](around:%f,%f,%f);out;",
+                    osmTag, osmTagValue, radius, latitude, longitude);
+            } else {
+                // For tag=value pairs (most common case) - this finds cafes, restaurants, etc.
+                overpassQuery = String.format(
+                    "[out:json];node[\"%s\"=\"%s\"](around:%f,%f,%f);out;",
+                    osmTag, osmTagValue, radius, latitude, longitude);
+            }
+            
+            Log.d(TAG, "Overpass query: " + overpassQuery);
             
             // Encode the query
             String encodedQuery = URLEncoder.encode(overpassQuery, "UTF-8");
@@ -396,7 +415,8 @@ public class OsmdroidProvider implements MapProvider {
                             @Override
                             public void run() {
                                 try {
-                                    listener.onPlacesError("Network error while searching for places");
+                                    Log.e(TAG, "Network error connecting to Overpass API: " + e.getMessage());
+                                    listener.onPlacesError("Network error while searching for places. Try again later.");
                                 } catch (Exception ex) {
                                     Log.e(TAG, "Error in onPlacesError callback: " + ex.getMessage(), ex);
                                 }
@@ -510,30 +530,67 @@ public class OsmdroidProvider implements MapProvider {
         // Map common search queries to OSM tags
         query = query.toLowerCase().trim();
         
+        // Return just the key part (not key=value) to use in our enhanced query format
         if (query.contains("coffee") || query.contains("cafe")) {
-            return "amenity=cafe";
+            return "amenity";  // We'll use "cafe" as the value
         } else if (query.contains("restaurant")) {
-            return "amenity=restaurant";
+            return "amenity";  // Key for restaurants
         } else if (query.contains("bar")) {
-            return "amenity=bar";
+            return "amenity";  // Key for bars
         } else if (query.contains("hotel")) {
-            return "tourism=hotel";
+            return "tourism";  // Key for hotels
         } else if (query.contains("park")) {
-            return "leisure=park";
+            return "leisure";  // Key for parks
         } else if (query.contains("shop") || query.contains("store")) {
-            return "shop";
+            return "shop";     // Key for shops
         } else if (query.contains("gas") || query.contains("fuel")) {
-            return "amenity=fuel";
+            return "amenity";  // Key for gas stations
         } else if (query.contains("school")) {
-            return "amenity=school";
+            return "amenity";  // Key for schools
         } else if (query.contains("hospital")) {
-            return "amenity=hospital";
+            return "amenity";  // Key for hospitals
         } else if (query.contains("bank")) {
-            return "amenity=bank";
+            return "amenity";  // Key for banks
         }
         
-        // Default to amenity for generic searches
+        // Default to name for generic searches
         return "name";
+    }
+    
+    /**
+     * Get the OSM tag value based on the query
+     */
+    private String getOsmTagValueForQuery(String query) {
+        // Map common search queries to OSM tag values
+        query = query.toLowerCase().trim();
+        
+        if (query.contains("coffee") || query.contains("cafe")) {
+            return "cafe";
+        } else if (query.contains("restaurant")) {
+            return "restaurant";
+        } else if (query.contains("bar")) {
+            return "bar";
+        } else if (query.contains("hotel")) {
+            return "hotel";
+        } else if (query.contains("park")) {
+            return "park";
+        } else if (query.contains("gas") || query.contains("fuel")) {
+            return "fuel";
+        } else if (query.contains("school")) {
+            return "school";
+        } else if (query.contains("hospital")) {
+            return "hospital";
+        } else if (query.contains("bank")) {
+            return "bank";
+        }
+        
+        // For generic shop searches, return null (we'll use a different query format)
+        if (query.contains("shop") || query.contains("store")) {
+            return null;
+        }
+        
+        // Return the query itself for name searches
+        return query;
     }
     
     private List<PlaceInfo> parseOverpassResponse(String response) throws JSONException {

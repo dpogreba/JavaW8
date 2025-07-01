@@ -36,7 +36,7 @@ public class HomeFragment extends Fragment {
 
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
-    private static final double SEARCH_RADIUS_METERS = 2000; // 2 km radius
+    private static final double SEARCH_RADIUS_METERS = 5000; // 5 km radius - increased for better coverage
     private static final long CAMERA_IDLE_DEBOUNCE_MS = 1000; // 1 second debounce for map movements
     
     private MapProvider mapProvider;
