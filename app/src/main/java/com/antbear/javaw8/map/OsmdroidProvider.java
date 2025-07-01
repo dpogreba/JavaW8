@@ -8,6 +8,7 @@ import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.ViewGroup;
+import java.io.File;
 
 import com.antbear.javaw8.utils.ThreadUtils;
 import com.antbear.javaw8.utils.UiMessageHandler;
@@ -78,25 +79,99 @@ public class OsmdroidProvider implements MapProvider {
         this.context = context;
         
         try {
-            // Initialize osmdroid configuration
-            Configuration.getInstance().load(context, PreferenceManager.getDefaultSharedPreferences(context));
+            // Get application context to avoid memory leaks
+            Context appContext = context.getApplicationContext();
             
-            // Set user agent to avoid getting banned from OSM servers
-            Configuration.getInstance().setUserAgentValue(context.getPackageName());
+            // Configure osmdroid
+            org.osmdroid.config.Configuration.getInstance().load(
+                appContext, 
+                PreferenceManager.getDefaultSharedPreferences(appContext)
+            );
             
-            // Initialize HTTP client for API requests
+            // Set a detailed user agent string to avoid getting banned by tile servers
+            String userAgent = appContext.getPackageName() + "/" + 
+                               getAppVersionName(appContext) + " " +
+                               "osmdroid/" + org.osmdroid.library.BuildConfig.VERSION_NAME;
+            org.osmdroid.config.Configuration.getInstance().setUserAgentValue(userAgent);
+            
+            // Set cache paths explicitly
+            File cacheDir = getCacheDir(appContext);
+            if (cacheDir != null) {
+                org.osmdroid.config.Configuration.getInstance().setOsmdroidTileCache(cacheDir);
+                org.osmdroid.config.Configuration.getInstance().setOsmdroidBasePath(cacheDir);
+                Log.d(TAG, "OSMdroid cache dir set to: " + cacheDir.getAbsolutePath());
+            } else {
+                Log.w(TAG, "Could not set OSMdroid cache directory, using default");
+            }
+            
+            // Set user-agent header for OkHttp requests
             HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
             logging.setLevel(HttpLoggingInterceptor.Level.BASIC);
             
             httpClient = new OkHttpClient.Builder()
                     .addInterceptor(logging)
+                    .addInterceptor(chain -> {
+                        Request original = chain.request();
+                        Request request = original.newBuilder()
+                                .header("User-Agent", userAgent)
+                                .build();
+                        return chain.proceed(request);
+                    })
+                    .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
                     .build();
             
             initialized = true;
-            Log.d(TAG, "osmdroid initialized successfully");
+            Log.d(TAG, "osmdroid initialized successfully with user agent: " + userAgent);
         } catch (Exception e) {
             Log.e(TAG, "Error initializing osmdroid provider: " + e.getMessage(), e);
             initialized = false;
+        }
+    }
+    
+    /**
+     * Get app version name for user agent string
+     */
+    private String getAppVersionName(Context context) {
+        try {
+            return context.getPackageManager()
+                    .getPackageInfo(context.getPackageName(), 0)
+                    .versionName;
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting app version: " + e.getMessage());
+            return "1.0";
+        }
+    }
+    
+    /**
+     * Get a suitable cache directory for map tiles
+     */
+    private File getCacheDir(Context context) {
+        try {
+            // Try the recommended OSMdroid way first
+            File osmCacheDir = new File(context.getCacheDir(), "osmdroid");
+            if (!osmCacheDir.exists()) {
+                if (osmCacheDir.mkdirs()) {
+                    Log.d(TAG, "Created osmdroid cache directory");
+                }
+            }
+            
+            if (osmCacheDir.exists() && osmCacheDir.canWrite()) {
+                return osmCacheDir;
+            }
+            
+            // Fall back to the app's main cache directory
+            File fallbackDir = context.getCacheDir();
+            if (fallbackDir.exists() && fallbackDir.canWrite()) {
+                Log.d(TAG, "Using app cache directory for osmdroid");
+                return fallbackDir;
+            }
+            
+            Log.w(TAG, "No suitable cache directory found");
+            return null;
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating cache directory: " + e.getMessage(), e);
+            return null;
         }
     }
     
@@ -130,22 +205,52 @@ public class OsmdroidProvider implements MapProvider {
     private void setupMap() {
         if (mapView == null) return;
         
-        // Configure the map
-        mapView.setTileSource(TileSourceFactory.MAPNIK);
-        mapView.setMultiTouchControls(true);
-        mapView.setBuiltInZoomControls(true);
-        mapView.setTilesScaledToDpi(true);
-        
-        // Set up location overlay
-        myLocationOverlay = new MyLocationNewOverlay(new GpsMyLocationProvider(context), mapView);
-        myLocationOverlay.enableMyLocation();
-        mapView.getOverlays().add(myLocationOverlay);
-        
-        // Set default zoom
-        IMapController mapController = mapView.getController();
-        mapController.setZoom(14.0);
-        
-        Log.d(TAG, "osmdroid map setup complete");
+        try {
+            // Configure the map
+            mapView.setTileSource(TileSourceFactory.MAPNIK);
+            mapView.setMultiTouchControls(true);
+            mapView.setBuiltInZoomControls(true);
+            mapView.setTilesScaledToDpi(true);
+            
+            // Enable hardware acceleration
+            mapView.setHardwareAccelerationEnabled(true);
+            
+            // Enable tile downloading
+            mapView.setUseDataConnection(true);
+            
+            // Set a high tile download threads count
+            org.osmdroid.config.Configuration.getInstance().setTileDownloadThreads((short)8);
+            
+            // Set tile download maximum queue size
+            org.osmdroid.config.Configuration.getInstance().setTileDownloadMaxQueueSize((short)128);
+            
+            // Set tile filesystem threads count
+            org.osmdroid.config.Configuration.getInstance().setTileFileSystemThreads((short)8);
+            
+            // Set maximum tile cache size
+            org.osmdroid.config.Configuration.getInstance().setTileFileSystemMaxQueueSize((short)128);
+            
+            // Set up location overlay
+            myLocationOverlay = new MyLocationNewOverlay(new GpsMyLocationProvider(context), mapView);
+            myLocationOverlay.enableMyLocation();
+            mapView.getOverlays().add(myLocationOverlay);
+            
+            // Set default zoom
+            IMapController mapController = mapView.getController();
+            mapController.setZoom(14.0);
+            
+            // Add a debug listener to report tile loading issues
+            mapView.addOnFirstLayoutListener((v, left, top, right, bottom) -> {
+                Log.d(TAG, "Map first layout event - size: " + (right-left) + "x" + (bottom-top));
+                
+                // Force tiles to load after layout
+                mapView.invalidate();
+            });
+            
+            Log.d(TAG, "osmdroid map setup complete");
+        } catch (Exception e) {
+            Log.e(TAG, "Error setting up map: " + e.getMessage(), e);
+        }
     }
     
     @Override
@@ -522,18 +627,39 @@ public class OsmdroidProvider implements MapProvider {
     public void onDestroy() {
         // Clean up resources
         if (mapView != null) {
-            mapView.onDetach();
+            try {
+                mapView.onDetach();
+                Log.d(TAG, "MapView detached");
+            } catch (Exception e) {
+                Log.e(TAG, "Error detaching MapView: " + e.getMessage(), e);
+            }
         }
         
         if (myLocationOverlay != null) {
-            myLocationOverlay.disableMyLocation();
+            try {
+                myLocationOverlay.disableMyLocation();
+                Log.d(TAG, "Location overlay disabled");
+            } catch (Exception e) {
+                Log.e(TAG, "Error disabling location overlay: " + e.getMessage(), e);
+            }
         }
+        
+        // Clear cache if desired
+        /*
+        try {
+            org.osmdroid.config.Configuration.getInstance().getTileFileSystemProvider().clearCurrentCache();
+            Log.d(TAG, "Tile cache cleared");
+        } catch (Exception e) {
+            Log.e(TAG, "Error clearing tile cache: " + e.getMessage(), e);
+        }
+        */
         
         markersById.clear();
         markerIds.clear();
         mapReadyListener = null;
         markerClickListener = null;
         infoWindowClickListener = null;
+        httpClient = null;
     }
     
     /**
