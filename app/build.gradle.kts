@@ -64,6 +64,10 @@ dependencies {
     // Location services dependency
     implementation("com.google.android.gms:play-services-location:21.0.1")
     
+    // Google Maps dependencies
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.android.libraries.places:places:3.3.0")
+    
     // osmdroid dependencies
     implementation("org.osmdroid:osmdroid-android:6.1.17")
     implementation("org.osmdroid:osmdroid-mapsforge:6.1.17")
