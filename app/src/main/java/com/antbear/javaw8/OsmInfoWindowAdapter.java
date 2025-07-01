@@ -57,9 +57,8 @@ public class OsmInfoWindowAdapter extends InfoWindow {
                 
                 // Address is the first line
                 TextView addressView = mView.findViewById(R.id.txt_address);
-                String address = "";
                 if (lines.length > 0) {
-                    address = lines[0];
+                    final String address = lines[0]; // Make final for lambda
                     addressView.setText(address);
                     
                     // Make the address clickable and underlined
@@ -86,7 +85,7 @@ public class OsmInfoWindowAdapter extends InfoWindow {
                 // Process the remaining lines
                 for (String line : lines) {
                     if (line.startsWith("Phone:")) {
-                        String phoneNumber = line;
+                        final String phoneNumber = line; // Make final for lambda
                         phoneView.setText(phoneNumber);
                         
                         // Make the phone number clickable and underlined

@@ -5,10 +5,11 @@ import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.Looper;
-import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.ViewGroup;
 import java.io.File;
+
+import androidx.preference.PreferenceManager;
 
 import com.antbear.javaw8.utils.ThreadUtils;
 import com.antbear.javaw8.utils.UiMessageHandler;
@@ -90,7 +91,7 @@ public class OsmdroidProvider implements MapProvider {
             // Configure osmdroid
             org.osmdroid.config.Configuration.getInstance().load(
                 appContext, 
-                PreferenceManager.getDefaultSharedPreferences(appContext)
+                androidx.preference.PreferenceManager.getDefaultSharedPreferences(appContext)
             );
             
             // Set a detailed user agent string to avoid getting banned by tile servers
