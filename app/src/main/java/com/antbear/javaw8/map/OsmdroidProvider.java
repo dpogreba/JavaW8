@@ -38,6 +38,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -73,6 +75,9 @@ public class OsmdroidProvider implements MapProvider {
     // Maps to keep track of markers
     private Map<String, Marker> markersById = new HashMap<>();
     private Map<Marker, String> markerIds = new HashMap<>();
+    
+    // Track currently open info window to ensure only one is shown at a time
+    private Marker currentOpenInfoWindow = null;
     
     @Override
     public void initialize(Context context) {
@@ -296,8 +301,16 @@ public class OsmdroidProvider implements MapProvider {
             public boolean onMarkerClick(Marker m, MapView mapView) {
                 Log.d(TAG, "Marker clicked: " + title);
                 
+                // Close any currently open info window
+                if (currentOpenInfoWindow != null && currentOpenInfoWindow != m) {
+                    currentOpenInfoWindow.closeInfoWindow();
+                }
+                
                 // Show the info window for this marker
                 m.showInfoWindow();
+                
+                // Update the reference to the currently open info window
+                currentOpenInfoWindow = m;
                 
                 // Notify the listener if set
                 if (markerClickListener != null) {
@@ -366,10 +379,18 @@ public class OsmdroidProvider implements MapProvider {
     private void searchWithOverpass(String query, double latitude, double longitude, double radius,
                                  OnPlacesFoundListener listener) {
         try {
-            // Convert query to appropriate OSM tags
-            String osmTag = getOsmTagForQuery(query);
+            // Track if we're looking for coffee shops specifically
+            boolean isCoffeeSearch = query.toLowerCase().contains("coffee") || 
+                                    query.toLowerCase().contains("cafe");
             
-            // Get tag value to use in more specific queries
+            // If this is a coffee shop search, we'll use a more comprehensive approach
+            if (isCoffeeSearch) {
+                searchForCoffeeShops(latitude, longitude, radius, listener);
+                return;
+            }
+            
+            // For non-coffee searches, use the standard approach
+            String osmTag = getOsmTagForQuery(query);
             String osmTagValue = getOsmTagValueForQuery(query);
             
             // Build Overpass query based on tag type
@@ -591,6 +612,182 @@ public class OsmdroidProvider implements MapProvider {
         
         // Return the query itself for name searches
         return query;
+    }
+    
+    /**
+     * Get additional OSM tags to search for when looking for coffee shops
+     * This helps find places that might be classified differently in OSM but still serve coffee
+     */
+    private List<String[]> getAdditionalCoffeeShopQueries() {
+        List<String[]> queries = new ArrayList<>();
+        
+        // Standard coffee shop tags
+        queries.add(new String[]{"amenity", "cafe"});
+        
+        // Coffee shops that might be tagged as restaurants
+        queries.add(new String[]{"amenity", "restaurant"});
+        
+        // Places with coffee in the name
+        queries.add(new String[]{"name", "coffee"});
+        queries.add(new String[]{"name", "café"});
+        queries.add(new String[]{"name", "espresso"});
+        
+        // Bakeries often serve coffee too
+        queries.add(new String[]{"shop", "bakery"});
+        
+        // Fast food places that might serve coffee
+        queries.add(new String[]{"amenity", "fast_food"});
+        
+        // Other possible tags for coffee-serving places
+        queries.add(new String[]{"cuisine", "coffee_shop"});
+        queries.add(new String[]{"amenity", "restaurant"});
+        queries.add(new String[]{"amenity", "bar"});
+        
+        return queries;
+    }
+    
+    /**
+     * Enhanced search specifically for coffee shops using multiple tag combinations
+     */
+    private void searchForCoffeeShops(double latitude, double longitude, double radius,
+                                   OnPlacesFoundListener listener) {
+        Log.d(TAG, "Performing enhanced coffee shop search");
+        
+        // Get all the queries we want to try
+        List<String[]> queryList = getAdditionalCoffeeShopQueries();
+        
+        // Track all found places to avoid duplicates
+        final Map<String, PlaceInfo> allFoundPlaces = new HashMap<>();
+        final AtomicInteger pendingQueries = new AtomicInteger(queryList.size());
+        final AtomicBoolean errorReported = new AtomicBoolean(false);
+        
+        // For each query in our list, perform a separate search
+        for (String[] queryPair : queryList) {
+            final String tagKey = queryPair[0];
+            final String tagValue = queryPair[1];
+            
+            // Build the appropriate Overpass query
+            String overpassQuery;
+            
+            if (tagKey.equals("name")) {
+                // Name-based search (case insensitive)
+                overpassQuery = String.format(
+                    "[out:json];node[\"%s\"~\"%s\",i](around:%f,%f,%f);out;",
+                    tagKey, tagValue, radius, latitude, longitude);
+            } else {
+                // Tag=value search
+                overpassQuery = String.format(
+                    "[out:json];node[\"%s\"=\"%s\"](around:%f,%f,%f);out;",
+                    tagKey, tagValue, radius, latitude, longitude);
+            }
+            
+            Log.d(TAG, "Coffee shop search query: " + overpassQuery);
+            
+            try {
+                // Encode the query
+                String encodedQuery = URLEncoder.encode(overpassQuery, "UTF-8");
+                String url = OVERPASS_API_URL + "?data=" + encodedQuery;
+                
+                // Build the request
+                Request request = new Request.Builder()
+                        .url(url)
+                        .header("User-Agent", context.getPackageName())
+                        .build();
+                
+                // Execute the request
+                httpClient.newCall(request).enqueue(new Callback() {
+                    @Override
+                    public void onFailure(Call call, IOException e) {
+                        Log.e(TAG, "Coffee shop search failed for " + tagKey + "=" + tagValue + ": " + e.getMessage());
+                        checkIfAllQueriesCompleted(pendingQueries, allFoundPlaces, errorReported, listener);
+                    }
+                    
+                    @Override
+                    public void onResponse(Call call, Response response) throws IOException {
+                        if (!response.isSuccessful()) {
+                            Log.e(TAG, "Coffee shop search error for " + tagKey + "=" + tagValue + ": " + response.code());
+                            checkIfAllQueriesCompleted(pendingQueries, allFoundPlaces, errorReported, listener);
+                            return;
+                        }
+                        
+                        try {
+                            // Get the response body
+                            String responseBody = response.body().string();
+                            
+                            // Parse the response
+                            List<PlaceInfo> places = parseOverpassResponse(responseBody);
+                            
+                            // Add the places to our map, avoiding duplicates
+                            for (PlaceInfo place : places) {
+                                String placeId = place.getId();
+                                
+                                // If this is a new place, add it
+                                if (!allFoundPlaces.containsKey(placeId)) {
+                                    allFoundPlaces.put(placeId, place);
+                                    Log.d(TAG, "Found coffee shop: " + place.getName() + " (" + tagKey + "=" + tagValue + ")");
+                                }
+                            }
+                            
+                            // Check if all queries have completed
+                            checkIfAllQueriesCompleted(pendingQueries, allFoundPlaces, errorReported, listener);
+                            
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error parsing coffee shop response for " + tagKey + "=" + tagValue + ": " + e.getMessage());
+                            checkIfAllQueriesCompleted(pendingQueries, allFoundPlaces, errorReported, listener);
+                        }
+                    }
+                });
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error preparing coffee shop search for " + tagKey + "=" + tagValue + ": " + e.getMessage());
+                checkIfAllQueriesCompleted(pendingQueries, allFoundPlaces, errorReported, listener);
+            }
+        }
+    }
+    
+    /**
+     * Check if all queries have completed and return the results if they have
+     */
+    private void checkIfAllQueriesCompleted(AtomicInteger pendingQueries, 
+                                         Map<String, PlaceInfo> allFoundPlaces,
+                                         AtomicBoolean errorReported,
+                                         OnPlacesFoundListener listener) {
+        
+        // Decrement the counter of pending queries
+        int remaining = pendingQueries.decrementAndGet();
+        Log.d(TAG, "Completed a coffee shop query. " + remaining + " queries remaining");
+        
+        // If there are still queries pending, wait for them
+        if (remaining > 0) {
+            return;
+        }
+        
+        // All queries have completed, deliver the results
+        ThreadUtils.runOnMainThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (allFoundPlaces.isEmpty()) {
+                        // No places found
+                        if (!errorReported.getAndSet(true)) {
+                            listener.onPlacesError("No coffee shops found nearby");
+                        }
+                    } else {
+                        // Convert the map values to an array
+                        PlaceInfo[] placesArray = allFoundPlaces.values().toArray(new PlaceInfo[0]);
+                        
+                        // Report success
+                        listener.onPlacesFound(placesArray);
+                        Log.d(TAG, "Found " + placesArray.length + " coffee shops in total");
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error delivering coffee shop results: " + e.getMessage());
+                    if (!errorReported.getAndSet(true)) {
+                        listener.onPlacesError("Error processing coffee shop results");
+                    }
+                }
+            }
+        });
     }
     
     private List<PlaceInfo> parseOverpassResponse(String response) throws JSONException {
