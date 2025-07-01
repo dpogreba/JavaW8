@@ -835,7 +835,7 @@ public class OsmdroidProvider implements MapProvider {
             // Extract phone
             String phone = tags.optString("phone", "");
             
-            // Create place info
+            // Create place info - explicitly mark as NOT sample data (real API data)
             PlaceInfo place = new PlaceInfo(
                     id,
                     name,
@@ -844,7 +844,7 @@ public class OsmdroidProvider implements MapProvider {
                     address,
                     phone,
                     null, // OSM doesn't have ratings
-                    false
+                    false // Not sample data - this is real data from OSM
             );
             
             places.add(place);
