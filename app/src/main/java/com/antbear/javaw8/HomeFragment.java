@@ -322,7 +322,7 @@ public class HomeFragment extends Fragment {
         
         // Search for coffee shops near the user's location using the map provider
         mapProvider.searchNearbyPlaces(
-            "coffee shop", 
+            "coffee", 
             lastKnownLocation.getLatitude(), 
             lastKnownLocation.getLongitude(), 
             searchRadiusMeters,

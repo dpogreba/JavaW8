@@ -291,11 +291,8 @@ public class GoogleMapsProvider implements MapProvider {
         // Create a session token for the autocomplete session
         AutocompleteSessionToken token = AutocompleteSessionToken.newInstance();
         
-        // Build broader query strings to catch more results
+        // Use the query directly (we now pass 'coffee' from HomeFragment)
         String searchQuery = query;
-        if (!placeTypes.isEmpty() && placeTypes.get(0).equals(PlaceTypes.CAFE)) {
-            searchQuery = "coffee"; // Broader term to catch more coffee places
-        }
         
         Log.d(TAG, "Searching for places with query: " + searchQuery + " and types: " + placeTypes);
         
