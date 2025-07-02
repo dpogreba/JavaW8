@@ -393,7 +393,7 @@ public class GoogleMapsProvider implements MapProvider {
             
             if (listener != null) {
                 // Provide a more user-friendly error message
-                String userMessage = "Error searching for places";
+                final String userMessage;
                 if (errorMessage != null) {
                     if (errorMessage.contains("API key")) {
                         userMessage = "API key issue: Please contact support";
@@ -402,6 +402,8 @@ public class GoogleMapsProvider implements MapProvider {
                     } else {
                         userMessage = "Error: " + errorMessage;
                     }
+                } else {
+                    userMessage = "Error searching for places";
                 }
                 
                 ThreadUtils.runOnMainThread(() -> listener.onPlacesError(userMessage));
