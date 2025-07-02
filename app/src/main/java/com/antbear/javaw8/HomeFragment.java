@@ -99,6 +99,8 @@ public class HomeFragment extends Fragment {
      * Set up the map after it's ready
      */
     private void setupMap() {
+        Log.d(TAG, "Setting up map - map ready callback triggered");
+        
         // Set up info window click listener to open directions
         mapProvider.setOnInfoWindowClickListener(new MapProvider.OnInfoWindowClickListener() {
             @Override
@@ -107,16 +109,22 @@ public class HomeFragment extends Fragment {
             }
         });
         
-        // Enable my location button if permission is granted
-        enableMyLocation();
-        
         // Default location (in case permission is denied)
         double defaultLat = 37.4220;
         double defaultLng = -122.0841; // Mountain View, CA
+        Log.d(TAG, "Moving camera to default location: " + defaultLat + ", " + defaultLng);
         mapProvider.moveCamera(defaultLat, defaultLng, 12);
         
-        // Add a test marker
-        mapProvider.addMarker(defaultLat, defaultLng, "Test Marker", "This is a test marker");
+        // Add a test marker - this should always appear
+        String testMarkerId = mapProvider.addMarker(defaultLat, defaultLng, "Test Marker", "This is a test marker");
+        Log.d(TAG, "Added test marker with ID: " + (testMarkerId != null ? testMarkerId : "FAILED - null ID returned"));
+        
+        // Add another test marker nearby to verify multiple markers work
+        String testMarker2Id = mapProvider.addMarker(defaultLat + 0.005, defaultLng + 0.005, "Another Test Marker", "This is another test marker");
+        Log.d(TAG, "Added second test marker with ID: " + (testMarker2Id != null ? testMarker2Id : "FAILED - null ID returned"));
+        
+        // Enable my location button if permission is granted (do this after markers to avoid timing issues)
+        enableMyLocation();
     }
     
     /**
@@ -172,31 +180,66 @@ public class HomeFragment extends Fragment {
     }
     
     private void enableMyLocation() {
+        Log.d(TAG, "Enabling my location...");
+        
         // Check if permission is granted
         boolean hasPermission = ActivityCompat.checkSelfPermission(requireContext(), 
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ActivityCompat.checkSelfPermission(requireContext(), 
                 Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         
+        Log.d(TAG, "Location permission granted: " + hasPermission);
+        
         if (hasPermission) {
-            // Enable the my-location layer
-            mapProvider.enableMyLocation(true);
-            
-            // Get the user's last known location
-            fusedLocationClient.getLastLocation()
-                .addOnSuccessListener(requireActivity(), location -> {
-                    if (location != null) {
-                        // Save the user's last known location
-                        lastKnownLocation = location;
+            try {
+                // Enable the my-location layer
+                mapProvider.enableMyLocation(true);
+                
+                // Get the user's last known location
+                Log.d(TAG, "Requesting last known location...");
+                fusedLocationClient.getLastLocation()
+                    .addOnSuccessListener(requireActivity(), location -> {
+                        if (location != null) {
+                            Log.d(TAG, "Got last known location: " + location.getLatitude() + ", " + location.getLongitude());
+                            
+                            // Save the user's last known location
+                            lastKnownLocation = location;
+                            
+                            // Got the user's location, center the map there
+                            mapProvider.moveCamera(location.getLatitude(), location.getLongitude(), 15);
+                            
+                            // Search for nearby coffee shops
+                            searchNearbyCoffeeShops();
+                        } else {
+                            Log.e(TAG, "Last known location is null from fusedLocationClient");
+                            
+                            // If location is null, use a default location to ensure we can search
+                            lastKnownLocation = new Location("default");
+                            lastKnownLocation.setLatitude(37.4220); // Mountain View
+                            lastKnownLocation.setLongitude(-122.0841);
+                            
+                            // Search using default location
+                            Log.d(TAG, "Using default location for search");
+                            searchNearbyCoffeeShops();
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "Error getting last location: " + e.getMessage(), e);
                         
-                        // Got the user's location, center the map there
-                        mapProvider.moveCamera(location.getLatitude(), location.getLongitude(), 15);
+                        // If there's an error, use a default location
+                        lastKnownLocation = new Location("default");
+                        lastKnownLocation.setLatitude(37.4220); // Mountain View
+                        lastKnownLocation.setLongitude(-122.0841);
                         
-                        // Search for nearby coffee shops
+                        // Search using default location
+                        Log.d(TAG, "Using default location for search after location error");
                         searchNearbyCoffeeShops();
-                    }
-                });
+                    });
+            } catch (Exception e) {
+                Log.e(TAG, "Exception in enableMyLocation: " + e.getMessage(), e);
+            }
         } else {
+            Log.d(TAG, "Requesting location permissions...");
             // Request permission
             requestPermissions(new String[]{
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -242,17 +285,24 @@ public class HomeFragment extends Fragment {
      * Search for coffee shops near the user's location
      */
     private void searchNearbyCoffeeShops() {
+        Log.d(TAG, "searchNearbyCoffeeShops called");
+        
         // Reset the counter each time we start a new search
         totalCoffeeShopsAdded = 0;
         markerTitleById.clear();
         
-        // No fallback timer - only using real data
-        
+        // Double-check for null location again
         if (lastKnownLocation == null) {
-            Log.e(TAG, "Last known location is null - cannot search for coffee shops");
-            showToast("Unable to get your location.", Toast.LENGTH_LONG);
-            return;
+            Log.e(TAG, "Last known location is still null - cannot search for coffee shops");
+            showToast("Unable to get your location. Using default location.", Toast.LENGTH_LONG);
+            
+            // Create a default location to allow search to continue
+            lastKnownLocation = new Location("default");
+            lastKnownLocation.setLatitude(37.4220); // Mountain View
+            lastKnownLocation.setLongitude(-122.0841);
         }
+        
+        Log.d(TAG, "Search location: " + lastKnownLocation.getLatitude() + ", " + lastKnownLocation.getLongitude());
 
         if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
             ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {

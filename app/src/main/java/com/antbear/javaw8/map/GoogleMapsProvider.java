@@ -69,16 +69,25 @@ public class GoogleMapsProvider implements MapProvider {
             // Initialize the Google Maps Places API
             if (!Places.isInitialized()) {
                 String apiKey = context.getString(R.string.google_maps_key);
+                Log.d(TAG, "Initializing Places API with key: " + (apiKey != null ? "[Key exists]" : "[Key is null]"));
                 Places.initialize(context.getApplicationContext(), apiKey);
+            } else {
+                Log.d(TAG, "Places API already initialized");
             }
             
             // Create a Places client
             placesClient = Places.createClient(context);
+            if (placesClient != null) {
+                Log.d(TAG, "Places client created successfully");
+            } else {
+                Log.e(TAG, "Places client creation failed - null client returned");
+            }
             
             initialized = true;
             Log.d(TAG, "Google Maps provider initialized successfully");
         } catch (Exception e) {
             Log.e(TAG, "Error initializing Google Maps provider: " + e.getMessage(), e);
+            e.printStackTrace();
             initialized = false;
         }
     }
@@ -171,45 +180,56 @@ public class GoogleMapsProvider implements MapProvider {
             return null;
         }
         
-        // Generate a unique ID for this marker
-        String markerId = UUID.randomUUID().toString();
+        Log.d(TAG, "Adding marker at " + latitude + ", " + longitude + " with title: " + title);
         
-        // Create marker options
-        MarkerOptions options = new MarkerOptions()
-                .position(new LatLng(latitude, longitude))
-                .title(title)
-                .snippet(snippet);
-        
-        // Set marker color based on type
-        // Note: We can't use vector drawable directly with BitmapDescriptorFactory
-        // Use default marker with a color instead
         try {
-            float markerHue = BitmapDescriptorFactory.HUE_AZURE; // Default color
+            // Generate a unique ID for this marker
+            String markerId = UUID.randomUUID().toString();
             
-            // Use brown color for coffee shops to match app theme
-            if (title != null && (title.toLowerCase().contains("coffee") || 
-                                  title.toLowerCase().contains("cafe") || 
-                                  title.toLowerCase().contains("espresso"))) {
-                markerHue = BitmapDescriptorFactory.HUE_ORANGE;
+            // Create marker options
+            MarkerOptions options = new MarkerOptions()
+                    .position(new LatLng(latitude, longitude))
+                    .title(title)
+                    .snippet(snippet)
+                    .visible(true);
+            
+            // Set marker color based on type
+            // Use default marker with a color instead of custom bitmap
+            try {
+                float markerHue = BitmapDescriptorFactory.HUE_AZURE; // Default color
+                
+                // Use brown color for coffee shops to match app theme
+                if (title != null && (title.toLowerCase().contains("coffee") || 
+                                      title.toLowerCase().contains("cafe") || 
+                                      title.toLowerCase().contains("espresso"))) {
+                    markerHue = BitmapDescriptorFactory.HUE_ORANGE;
+                }
+                
+                options.icon(BitmapDescriptorFactory.defaultMarker(markerHue));
+                Log.d(TAG, "Set marker color for: " + title);
+            } catch (Exception e) {
+                Log.e(TAG, "Error setting marker icon, using default: " + e.getMessage(), e);
             }
             
-            options.icon(BitmapDescriptorFactory.defaultMarker(markerHue));
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting marker icon: " + e.getMessage());
-        }
-        
-        // Add the marker to the map
-        Marker marker = googleMap.addMarker(options);
-        
-        if (marker != null) {
-            // Store the marker
-            markersById.put(markerId, marker);
-            markerIds.put(marker, markerId);
+            // Add the marker to the map
+            Marker marker = googleMap.addMarker(options);
             
-            Log.d(TAG, "Added marker: " + title + " with ID: " + markerId);
+            if (marker != null) {
+                // Store the marker
+                markersById.put(markerId, marker);
+                markerIds.put(marker, markerId);
+                
+                Log.d(TAG, "Successfully added marker: " + title + " with ID: " + markerId);
+                return markerId;
+            } else {
+                Log.e(TAG, "Failed to add marker: googleMap.addMarker returned null");
+                return null;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Exception adding marker: " + e.getMessage(), e);
+            e.printStackTrace();
+            return null;
         }
-        
-        return markerId;
     }
     
     @Override
@@ -219,8 +239,13 @@ public class GoogleMapsProvider implements MapProvider {
             return;
         }
         
-        LatLng position = new LatLng(latitude, longitude);
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(position, zoomLevel));
+        try {
+            Log.d(TAG, "Moving camera to " + latitude + ", " + longitude + " with zoom level: " + zoomLevel);
+            LatLng position = new LatLng(latitude, longitude);
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(position, zoomLevel));
+        } catch (Exception e) {
+            Log.e(TAG, "Error moving camera: " + e.getMessage(), e);
+        }
     }
     
     @Override
