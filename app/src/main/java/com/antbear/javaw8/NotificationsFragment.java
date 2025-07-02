@@ -15,6 +15,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.fragment.app.Fragment;
 
+import com.antbear.javaw8.utils.UnitPreferences;
+
 public class NotificationsFragment extends Fragment {
 
     // Theme related views
@@ -106,7 +108,25 @@ public class NotificationsFragment extends Fragment {
     }
     
     private void updateRadiusText(int progress) {
-        // Display the radius value (add 1 to avoid 0 km)
-        searchRadiusValue.setText((progress + 1) + " km");
+        // Display the radius value (add 1 to avoid 0)
+        int radiusValue = progress + 1;
+        
+        // Check unit preference
+        if (UnitPreferences.useImperialUnits(requireContext())) {
+            // Use miles for imperial
+            searchRadiusValue.setText(radiusValue + " miles");
+        } else {
+            // Use km for metric
+            searchRadiusValue.setText(radiusValue + " km");
+        }
+    }
+    
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Update radius text when resuming to ensure it shows the correct units
+        if (searchRadiusSeekBar != null) {
+            updateRadiusText(searchRadiusSeekBar.getProgress());
+        }
     }
 }

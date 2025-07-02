@@ -278,10 +278,11 @@ public class GoogleMapsProvider implements MapProvider {
         // Define the place type(s) to search for based on the query
         List<String> placeTypes = getPlaceTypesForQuery(query);
         
-        // Create a rectangular search bound approximately matching the radius
-        // (converting meters to lat/lng differences)
-        double latDelta = radius / 111000.0; // approx. 111km per degree of latitude
-        double lngDelta = radius / (111000.0 * Math.cos(Math.toRadians(latitude))); // longitude degrees get wider at the equator
+        // Create a slightly larger rectangular search bound for more results
+        // Use 20% larger area than the requested radius to catch edge cases
+        double enlargementFactor = 1.2;
+        double latDelta = (radius * enlargementFactor) / 111000.0; // approx. 111km per degree of latitude
+        double lngDelta = (radius * enlargementFactor) / (111000.0 * Math.cos(Math.toRadians(latitude))); // longitude degrees get wider at the equator
         
         RectangularBounds bounds = RectangularBounds.newInstance(
                 new LatLng(latitude - latDelta, longitude - lngDelta),
@@ -290,20 +291,21 @@ public class GoogleMapsProvider implements MapProvider {
         // Create a session token for the autocomplete session
         AutocompleteSessionToken token = AutocompleteSessionToken.newInstance();
         
-        // Build a query string based on the search criteria
+        // Build broader query strings to catch more results
         String searchQuery = query;
         if (!placeTypes.isEmpty() && placeTypes.get(0).equals(PlaceTypes.CAFE)) {
-            searchQuery = "coffee shop";
+            searchQuery = "coffee"; // Broader term to catch more coffee places
         }
         
         Log.d(TAG, "Searching for places with query: " + searchQuery + " and types: " + placeTypes);
         
-        // Create autocomplete request with location bias
+        // Create autocomplete request with location bias, using broader parameters
         FindAutocompletePredictionsRequest predictionsRequest = FindAutocompletePredictionsRequest.builder()
                 .setLocationBias(bounds)
                 .setTypesFilter(placeTypes)
                 .setSessionToken(token)
                 .setQuery(searchQuery)
+                .setCountries("US") // Focus on US results for better relevance
                 .build();
                 
         // Execute the request to get autocomplete predictions
@@ -460,8 +462,14 @@ public class GoogleMapsProvider implements MapProvider {
         
         // Map specific queries to place types
         if (lowerQuery.contains("coffee") || lowerQuery.contains("cafe")) {
-            // For coffee shops, we specifically want to return ONLY coffee shops
-            return Arrays.asList(PlaceTypes.CAFE);
+            // For coffee shops, use multiple related types to get more results
+            return Arrays.asList(
+                PlaceTypes.CAFE,
+                PlaceTypes.RESTAURANT,
+                PlaceTypes.BAKERY,
+                PlaceTypes.FOOD,
+                PlaceTypes.STORE
+            );
         } else if (lowerQuery.contains("restaurant")) {
             return Arrays.asList(PlaceTypes.RESTAURANT);
         } else if (lowerQuery.contains("bar")) {
