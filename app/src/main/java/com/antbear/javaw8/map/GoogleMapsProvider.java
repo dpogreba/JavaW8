@@ -263,12 +263,17 @@ public class GoogleMapsProvider implements MapProvider {
                                  OnPlacesFoundListener listener) {
         if (!initialized || placesClient == null) {
             if (listener != null) {
-                listener.onPlacesError("Google Maps Places API not initialized");
+                Log.e(TAG, "Places API not initialized. Check if API key is valid and has Places API enabled.");
+                listener.onPlacesError("Google Maps Places API not initialized - Please check API key");
             }
             return;
         }
         
-        // No sample data fallback - using real Google Places API results only
+        // Log the search parameters for debugging
+        Log.d(TAG, "Searching for places with query: '" + query + 
+              "' at [" + latitude + ", " + longitude + "] with radius: " + radius + " meters" +
+              " using API key ending with: " + 
+              context.getString(R.string.google_maps_key).substring(Math.max(0, context.getString(R.string.google_maps_key).length() - 8)));
         
         // Define the place type(s) to search for based on the query
         List<String> placeTypes = getPlaceTypesForQuery(query);
@@ -377,10 +382,29 @@ public class GoogleMapsProvider implements MapProvider {
                 });
             }
         }).addOnFailureListener(exception -> {
-            Log.e(TAG, "Error finding places: " + exception.getMessage(), exception);
+            String errorMessage = exception.getMessage();
+            Log.e(TAG, "Error finding places: " + errorMessage, exception);
+            
+            // Detailed logging for API key issues
+            if (errorMessage != null && errorMessage.contains("API key")) {
+                Log.e(TAG, "API KEY ERROR: Please verify your API key has the Places API enabled and is not expired or restricted");
+                Log.e(TAG, "Using API key from strings.xml with SHA: " + String.valueOf(context.getString(R.string.google_maps_key).hashCode()));
+            }
             
             if (listener != null) {
-                ThreadUtils.runOnMainThread(() -> listener.onPlacesError("Error searching for places: " + exception.getMessage()));
+                // Provide a more user-friendly error message
+                String userMessage = "Error searching for places";
+                if (errorMessage != null) {
+                    if (errorMessage.contains("API key")) {
+                        userMessage = "API key issue: Please contact support";
+                    } else if (errorMessage.contains("network")) {
+                        userMessage = "Network error: Please check your connection";
+                    } else {
+                        userMessage = "Error: " + errorMessage;
+                    }
+                }
+                
+                ThreadUtils.runOnMainThread(() -> listener.onPlacesError(userMessage));
             }
         });
     }

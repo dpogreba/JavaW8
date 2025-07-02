@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Theme arrays -->
+    <string-array name="theme_entries">
+        <item>@string/theme_system</item>
+        <item>@string/theme_light</item>
+        <item>@string/theme_dark</item>
+    </string-array>
+    
+    <string-array name="theme_values">
+        <item>system</item>
+        <item>light</item>
+        <item>dark</item>
+    </string-array>
+    
     <string name="app_name">JavaW8</string>
     <string name="home">Home</string>
     <string name="dashboard">Dashboard</string>
@@ -13,6 +26,14 @@
     <string name="theme_system">System Default</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
+    
+    <!-- Unit preference strings -->
+    <string name="unit_preferences_title">Unit Preferences</string>
+    <string name="unit_system_title">Distance Units</string>
+    <string name="unit_system_imperial">Imperial (miles)</string>
+    <string name="unit_system_metric">Metric (kilometers)</string>
+    <string name="unit_system_changed_imperial">Changed to Imperial units (miles)</string>
+    <string name="unit_system_changed_metric">Changed to Metric units (kilometers)</string>
     
     <!-- Settings categories -->
     <string name="settings_appearance">Appearance</string>

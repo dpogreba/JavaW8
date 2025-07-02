@@ -16,6 +16,7 @@ import android.widget.Toast;
 
 import com.antbear.javaw8.utils.ThreadUtils;
 import com.antbear.javaw8.utils.UiMessageHandler;
+import com.antbear.javaw8.utils.UnitPreferences;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -38,7 +39,6 @@ public class HomeFragment extends Fragment {
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final double SEARCH_RADIUS_MILES = 3.0; // 3 mile radius
     private static final double METERS_PER_MILE = 1609.34; // Conversion factor
-    private static final double SEARCH_RADIUS_METERS = SEARCH_RADIUS_MILES * METERS_PER_MILE; // Convert to meters for API
     private static final long CAMERA_IDLE_DEBOUNCE_MS = 1000; // 1 second debounce for map movements
     
     private MapProvider mapProvider;
@@ -64,6 +64,9 @@ public class HomeFragment extends Fragment {
         
         // Initialize the map provider
         mapProvider = MapFactory.createMapProvider(requireContext());
+        
+        // Initialize unit preferences (defaults to imperial units)
+        UnitPreferences.initializeUnitSystem(requireContext(), null);
         
         // Set up map ready listener
         mapProvider.setOnMapReadyListener(new MapProvider.OnMapReadyListener() {
@@ -197,6 +200,9 @@ public class HomeFragment extends Fragment {
                             // Save the user's last known location
                             lastKnownLocation = location;
                             
+                            // Initialize unit preferences based on location
+                            UnitPreferences.initializeUnitSystem(requireContext(), location);
+                            
                             // Got the user's location, center the map there
                             mapProvider.moveCamera(location.getLatitude(), location.getLongitude(), 15);
                             
@@ -303,17 +309,23 @@ public class HomeFragment extends Fragment {
             return;
         }
         
-        // Show toast to let user know we're searching (including the search radius in miles)
-        showToast("Searching for coffee shops within " + SEARCH_RADIUS_MILES + " miles...", Toast.LENGTH_SHORT);
+        // Get the appropriate search radius based on user's unit preference
+        double searchRadiusMeters = getSearchRadiusInMeters();
+        
+        // Show toast with appropriate units
+        String unitDisplay = UnitPreferences.formatDistance(requireContext(), SEARCH_RADIUS_MILES);
+        showToast("Searching for coffee shops within " + unitDisplay + "...", Toast.LENGTH_SHORT);
+        
         Log.d(TAG, "Starting map search for coffee shops at: " + 
-              lastKnownLocation.getLatitude() + ", " + lastKnownLocation.getLongitude());
+              lastKnownLocation.getLatitude() + ", " + lastKnownLocation.getLongitude() + 
+              " with radius: " + searchRadiusMeters + " meters");
         
         // Search for coffee shops near the user's location using the map provider
         mapProvider.searchNearbyPlaces(
             "coffee shop", 
             lastKnownLocation.getLatitude(), 
             lastKnownLocation.getLongitude(), 
-            SEARCH_RADIUS_METERS,
+            searchRadiusMeters,
             new MapProvider.OnPlacesFoundListener() {
                 @Override
                 public void onPlacesFound(final PlaceInfo[] places) {
@@ -324,7 +336,8 @@ public class HomeFragment extends Fragment {
                                 for (PlaceInfo place : places) {
                                     addPlaceMarker(place);
                                 }
-                                showToast("Found " + places.length + " coffee shops within " + SEARCH_RADIUS_MILES + " miles", Toast.LENGTH_SHORT);
+                                String unitDisplay = UnitPreferences.formatDistance(requireContext(), SEARCH_RADIUS_MILES);
+                                showToast("Found " + places.length + " coffee shops within " + unitDisplay, Toast.LENGTH_SHORT);
                             } else {
                                 handlePlacesError("No coffee shops found");
                             }
@@ -337,10 +350,12 @@ public class HomeFragment extends Fragment {
                     Log.e(TAG, "Error finding places: " + errorMessage);
                     
                     // Log additional information to help debug network issues
+                    double searchRadiusMeters = getSearchRadiusInMeters();
                     Log.e(TAG, "Network debug - Search parameters: latitude=" + 
                           lastKnownLocation.getLatitude() + ", longitude=" + 
                           lastKnownLocation.getLongitude() + ", radius=" + 
-                          SEARCH_RADIUS_METERS + " meters (" + SEARCH_RADIUS_MILES + " miles)");
+                          searchRadiusMeters + " meters (" + 
+                          UnitPreferences.formatDistance(requireContext(), SEARCH_RADIUS_MILES) + ")");
                     
                     UiMessageHandler.runOnUiThreadIfFragmentAlive(HomeFragment.this, new UiMessageHandler.UiCallback() {
                         @Override
@@ -386,4 +401,20 @@ public class HomeFragment extends Fragment {
     }
     
     // Removed fallback methods - only using real data
+    
+    /**
+     * Get the search radius in meters based on user's unit preferences.
+     * @return Search radius in meters
+     */
+    private double getSearchRadiusInMeters() {
+        // We store the search radius in miles as the base unit
+        if (UnitPreferences.useImperialUnits(requireContext())) {
+            // For imperial units, convert miles directly to meters
+            return SEARCH_RADIUS_MILES * METERS_PER_MILE;
+        } else {
+            // For metric units, convert miles to km first, then to meters
+            double radiusKm = UnitPreferences.milesToKilometers(SEARCH_RADIUS_MILES);
+            return radiusKm * 1000; // 1 km = 1000 meters
+        }
+    }
 }
