@@ -6,7 +6,7 @@
     <string name="notifications">Notifications</string>
     <string name="submit">Submit</string>
     <string name="settings">Settings</string>
-    <string name="maps_api_key">AIzaSyBDLHnnEGKmaM4dvT5k895AvXnk0jBn_CE</string>
+    <string name="maps_api_key">AIzaSyAxR4Jrzoh3ht5rUxIPkHI25GUDXDxLoRk</string>
     
     <!-- Theme related strings -->
     <string name="theme_title">Theme</string>
@@ -30,5 +30,5 @@
     <string name="map_provider_switched_to_osm">Switched to OpenStreetMap</string>
     
     <!-- Google Maps strings -->
-    <string name="google_maps_key">AIzaSyBDLHnnEGKmaM4dvT5k895AvXnk0jBn_CE</string>
+    <string name="google_maps_key">AIzaSyAxR4Jrzoh3ht5rUxIPkHI25GUDXDxLoRk</string>
 </resources>

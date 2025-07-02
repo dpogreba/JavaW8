@@ -115,15 +115,7 @@ public class HomeFragment extends Fragment {
         Log.d(TAG, "Moving camera to default location: " + defaultLat + ", " + defaultLng);
         mapProvider.moveCamera(defaultLat, defaultLng, 12);
         
-        // Add a test marker - this should always appear
-        String testMarkerId = mapProvider.addMarker(defaultLat, defaultLng, "Test Marker", "This is a test marker");
-        Log.d(TAG, "Added test marker with ID: " + (testMarkerId != null ? testMarkerId : "FAILED - null ID returned"));
-        
-        // Add another test marker nearby to verify multiple markers work
-        String testMarker2Id = mapProvider.addMarker(defaultLat + 0.005, defaultLng + 0.005, "Another Test Marker", "This is another test marker");
-        Log.d(TAG, "Added second test marker with ID: " + (testMarker2Id != null ? testMarker2Id : "FAILED - null ID returned"));
-        
-        // Enable my location button if permission is granted (do this after markers to avoid timing issues)
+        // Enable my location button if permission is granted
         enableMyLocation();
     }
     
