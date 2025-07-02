@@ -1,11 +1,14 @@
 package com.antbear.javaw8.map;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.location.Location;
 import android.util.Log;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
@@ -25,11 +28,19 @@ import com.google.android.libraries.places.api.model.PlaceTypes;
 import com.google.android.libraries.places.api.model.RectangularBounds;
 import com.google.android.libraries.places.api.net.FindCurrentPlaceRequest;
 import com.google.android.libraries.places.api.net.PlacesClient;
-import com.google.android.libraries.places.api.model.AutocompleteSessionToken;
-import com.google.android.libraries.places.api.model.AutocompletePrediction;
-import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest;
 import com.google.android.libraries.places.api.net.FetchPlaceRequest;
 import com.google.android.libraries.places.api.net.FetchPlaceResponse;
+
+// Import the Nearby Search API classes
+import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest;
+import com.google.android.libraries.places.api.model.AutocompletePrediction;
+import com.google.android.libraries.places.api.model.AutocompleteSessionToken;
+import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest;
+import com.google.android.libraries.places.api.net.PlacesSearchResponse;
+import com.google.android.libraries.places.api.net.PlacesSearchRequest;
+import com.google.android.libraries.places.api.model.PhotoMetadata;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -278,33 +289,173 @@ public class GoogleMapsProvider implements MapProvider {
         // Define the place type(s) to search for based on the query
         List<String> placeTypes = getPlaceTypesForQuery(query);
         
-        // Create a slightly larger rectangular search bound for more results
-        // Use 20% larger area than the requested radius to catch edge cases
-        double enlargementFactor = 1.2;
+        // Use the direct findCurrentPlace API instead of autocomplete
+        // This approach gives results similar to what you'd see in Google Maps directly
+        
+        // First create the basic fields to request
+        List<Place.Field> placeFields = Arrays.asList(
+            Place.Field.ID, 
+            Place.Field.NAME,
+            Place.Field.LAT_LNG, 
+            Place.Field.ADDRESS,
+            Place.Field.PHONE_NUMBER,
+            Place.Field.RATING,
+            Place.Field.TYPES
+        );
+        
+        // Create a direct search for nearby places
+        FindCurrentPlaceRequest request = FindCurrentPlaceRequest.newInstance(placeFields);
+        
+        try {
+            // Check for location permissions
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                
+                // No permission, so use a different approach with a manually specified location
+                searchWithLocationBias(query, latitude, longitude, radius, listener, placeTypes);
+                return;
+            }
+            
+            // Use the direct Current Place API which gives more comprehensive results
+            placesClient.findCurrentPlace(request).addOnSuccessListener((response) -> {
+                List<PlaceInfo> places = new ArrayList<>();
+                
+                // If there are results, process them
+                if (response.getPlaceLikelihoods().size() > 0) {
+                    for (com.google.android.libraries.places.api.model.PlaceLikelihood placeLikelihood : response.getPlaceLikelihoods()) {
+                        Place place = placeLikelihood.getPlace();
+                        
+                        // Check if the place matches our search criteria
+                        if (isPlaceMatchingSearch(place, query, placeTypes)) {
+                            LatLng location = place.getLatLng();
+                            
+                            // Skip places without location
+                            if (location == null) continue;
+                            
+                            // Check if within radius
+                            float[] results = new float[1];
+                            Location.distanceBetween(latitude, longitude, 
+                                                   location.latitude, location.longitude, results);
+                            
+                            if (results[0] <= radius) {
+                                // Create place info object
+                                PlaceInfo placeInfo = new PlaceInfo(
+                                    place.getId() != null ? place.getId() : UUID.randomUUID().toString(),
+                                    place.getName() != null ? place.getName() : "Unnamed Place",
+                                    location.latitude,
+                                    location.longitude,
+                                    place.getAddress() != null ? place.getAddress() : "",
+                                    place.getPhoneNumber() != null ? place.getPhoneNumber() : "",
+                                    place.getRating() != null ? place.getRating().floatValue() : null,
+                                    false // Not sample data
+                                );
+                                
+                                places.add(placeInfo);
+                                Log.d(TAG, "Found matching place: " + placeInfo.getName());
+                            }
+                        }
+                    }
+                }
+                
+                // If we found places, return them
+                if (!places.isEmpty()) {
+                    PlaceInfo[] placesArray = places.toArray(new PlaceInfo[0]);
+                    ThreadUtils.runOnMainThread(() -> listener.onPlacesFound(placesArray));
+                    Log.d(TAG, "Found " + places.size() + " matching places");
+                } else {
+                    // If no results or few results from current place, try the location bias approach as backup
+                    Log.d(TAG, "No matches found with current place, trying location bias search");
+                    searchWithLocationBias(query, latitude, longitude, radius, listener, placeTypes);
+                }
+            }).addOnFailureListener(exception -> {
+                Log.e(TAG, "Error finding current places: " + exception.getMessage(), exception);
+                // Fall back to the location bias approach
+                searchWithLocationBias(query, latitude, longitude, radius, listener, placeTypes);
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Error in searchNearbyPlaces: " + e.getMessage(), e);
+            // Fall back to the location bias approach
+            searchWithLocationBias(query, latitude, longitude, radius, listener, placeTypes);
+        }
+    }
+    
+    /**
+     * Checks if a place matches our search criteria
+     */
+    private boolean isPlaceMatchingSearch(Place place, String query, List<String> placeTypes) {
+        // If no query, any place passes
+        if (query == null || query.isEmpty()) {
+            return true;
+        }
+        
+        // Get the place name
+        String name = place.getName();
+        if (name == null) {
+            return false;
+        }
+        
+        // Check name for query match
+        String lowercaseName = name.toLowerCase();
+        String lowercaseQuery = query.toLowerCase();
+        
+        // If the name contains the query, it's a match
+        if (lowercaseName.contains(lowercaseQuery)) {
+            return true;
+        }
+        
+        // If query is "coffee", check for "cafe" too
+        if (lowercaseQuery.equals("coffee") && lowercaseName.contains("cafe")) {
+            return true;
+        }
+        
+        // Check place types
+        List<Place.Type> types = place.getTypes();
+        if (types != null) {
+            // Convert Place.Type to string representation
+            List<String> placeTypeStrings = new ArrayList<>();
+            for (Place.Type type : types) {
+                placeTypeStrings.add(type.toString());
+            }
+            
+            // Check for intersection between the place's types and our search types
+            for (String typeString : placeTypeStrings) {
+                if (placeTypes.contains(typeString)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Search for places using location bias (fallback method when current place API fails)
+     */
+    private void searchWithLocationBias(String query, double latitude, double longitude, double radius,
+                                       OnPlacesFoundListener listener, List<String> placeTypes) {
+        Log.d(TAG, "Using location bias search for: " + query);
+        
+        // Create a session token
+        AutocompleteSessionToken token = AutocompleteSessionToken.newInstance();
+        
+        // Create a larger search area
+        double enlargementFactor = 1.5; // Make it 50% larger than requested to get more results
         double latDelta = (radius * enlargementFactor) / 111000.0; // approx. 111km per degree of latitude
         double lngDelta = (radius * enlargementFactor) / (111000.0 * Math.cos(Math.toRadians(latitude))); // longitude degrees get wider at the equator
         
         RectangularBounds bounds = RectangularBounds.newInstance(
                 new LatLng(latitude - latDelta, longitude - lngDelta),
                 new LatLng(latitude + latDelta, longitude + lngDelta));
-                
-        // Create a session token for the autocomplete session
-        AutocompleteSessionToken token = AutocompleteSessionToken.newInstance();
         
-        // Use the query directly (we now pass 'coffee' from HomeFragment)
-        String searchQuery = query;
-        
-        Log.d(TAG, "Searching for places with query: " + searchQuery + " and types: " + placeTypes);
-        
-        // Create autocomplete request with location bias, using broader parameters
+        // Create autocomplete request with broader parameters
         FindAutocompletePredictionsRequest predictionsRequest = FindAutocompletePredictionsRequest.builder()
                 .setLocationBias(bounds)
                 .setTypesFilter(placeTypes)
                 .setSessionToken(token)
-                .setQuery(searchQuery)
+                .setQuery(query)
                 .setCountries("US") // Focus on US results for better relevance
                 .build();
-                
+        
         // Execute the request to get autocomplete predictions
         placesClient.findAutocompletePredictions(predictionsRequest).addOnSuccessListener(response -> {
             List<PlaceInfo> places = new ArrayList<>();
@@ -323,7 +474,6 @@ public class GoogleMapsProvider implements MapProvider {
             // For each prediction, fetch the full place details
             for (AutocompletePrediction prediction : response.getAutocompletePredictions()) {
                 String placeId = prediction.getPlaceId();
-                String primaryText = prediction.getPrimaryText(null).toString();
                 
                 // Build a list of place fields to request
                 List<Place.Field> placeFields = Arrays.asList(
