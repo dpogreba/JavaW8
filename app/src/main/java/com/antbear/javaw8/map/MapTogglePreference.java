@@ -13,14 +13,14 @@ public class MapTogglePreference {
     
     /**
      * Get the current map provider preference.
+     * Always returns true for Google Maps.
      * 
      * @param context Application context
-     * @return true to use Google Maps, false to use OSM
+     * @return true (always use Google Maps)
      */
     public static boolean getPreference(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        // Default to Google Maps (true) since we want to switch to it for better coffee shop results
-        return prefs.getBoolean(KEY_USE_GOOGLE_MAPS, true);
+        // Always return true to use Google Maps
+        return true;
     }
     
     /**
@@ -37,15 +37,14 @@ public class MapTogglePreference {
     }
     
     /**
-     * Toggle the current map provider preference.
+     * Toggle functionality is disabled since we always use Google Maps.
+     * This method is kept for API compatibility but will always return true.
      * 
      * @param context Application context
-     * @return the new preference value after toggling
+     * @return true (always use Google Maps)
      */
     public static boolean togglePreference(Context context) {
-        boolean currentValue = getPreference(context);
-        boolean newValue = !currentValue;
-        setPreference(context, newValue);
-        return newValue;
+        // Always return true since Google Maps is enforced
+        return true;
     }
 }

@@ -82,17 +82,11 @@ public class HomeFragment extends Fragment {
     @Override
     public void onPause() {
         super.onPause();
-        // Cancel any pending fallback timer to prevent memory leaks
-        if (fallbackRunnable != null) {
-            fallbackHandler.removeCallbacks(fallbackRunnable);
-        }
+        // No fallback timer to cancel
     }
 
-    // Track added coffee shops for fallback decision
+    // Remove fallback tracking as we're using only real data
     private int totalCoffeeShopsAdded = 0;
-    private static final int FALLBACK_TIMEOUT_MS = 30000; // 30 seconds - extended further to give API more time on slow networks
-    private Handler fallbackHandler = new Handler(Looper.getMainLooper());
-    private Runnable fallbackRunnable;
     
     /**
      * Shows a toast message safely on the main thread
@@ -252,13 +246,11 @@ public class HomeFragment extends Fragment {
         totalCoffeeShopsAdded = 0;
         markerTitleById.clear();
         
-        // Start fallback timer
-        startFallbackTimer();
+        // No fallback timer - only using real data
         
         if (lastKnownLocation == null) {
             Log.e(TAG, "Last known location is null - cannot search for coffee shops");
-            showToast("Unable to get your location. Using fallback locations.", Toast.LENGTH_LONG);
-            addFallbackCoffeeShops();
+            showToast("Unable to get your location.", Toast.LENGTH_LONG);
             return;
         }
 
@@ -266,7 +258,6 @@ public class HomeFragment extends Fragment {
             ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "Location permission not granted");
             showToast("Location permission required to find nearby coffee shops", Toast.LENGTH_LONG);
-            addFallbackCoffeeShops();
             return;
         }
         
@@ -327,18 +318,15 @@ public class HomeFragment extends Fragment {
         // Safety check for fragment still attached
         if (!isAdded()) return;
 
+        // Just show the error message without adding fallback coffee shops
         showToast(errorMessage, Toast.LENGTH_SHORT);
-        addFallbackCoffeeShops();
     }
     
+    // onPause() is already defined above
     @Override
     public void onDestroy() {
         super.onDestroy();
-        // Cancel any pending timers to prevent memory leaks
-        if (fallbackRunnable != null) {
-            fallbackHandler.removeCallbacks(fallbackRunnable);
-            fallbackRunnable = null;
-        }
+        // No fallback timer to cancel anymore
         
         if (cameraIdleRunnable != null) {
             cameraIdleHandler.removeCallbacks(cameraIdleRunnable);
@@ -355,98 +343,5 @@ public class HomeFragment extends Fragment {
         }
     }
     
-    /**
-     * Starts a timer that will add fallback coffee shops if no real ones are found
-     */
-    private void startFallbackTimer() {
-        // Cancel any existing fallback timer
-        if (fallbackRunnable != null) {
-            fallbackHandler.removeCallbacks(fallbackRunnable);
-        }
-        
-        // Create a new fallback runnable
-        fallbackRunnable = new Runnable() {
-            @Override
-            public void run() {
-                // Check if any coffee shops were added
-                if (totalCoffeeShopsAdded == 0) {
-                    Log.d(TAG, "Fallback timer triggered - no coffee shops were found after " + 
-                         (FALLBACK_TIMEOUT_MS/1000) + " seconds");
-                    
-                    // Only add fallbacks if we haven't added any coffee shops yet
-                    UiMessageHandler.runOnUiThreadIfFragmentAlive(HomeFragment.this, new UiMessageHandler.UiCallback() {
-                        @Override
-                        public void onUiThread() {
-                            addFallbackCoffeeShops();
-                        }
-                    });
-                } else {
-                    Log.d(TAG, "Fallback timer ignored - " + totalCoffeeShopsAdded + 
-                         " coffee shops were already added");
-                }
-            }
-        };
-        
-        // Schedule the fallback runnable
-        fallbackHandler.postDelayed(fallbackRunnable, FALLBACK_TIMEOUT_MS);
-        Log.d(TAG, "Fallback timer started - will check for markers in " + 
-             (FALLBACK_TIMEOUT_MS/1000) + " seconds");
-    }
-    
-    /**
-     * Adds hardcoded fallback coffee shop locations when the Places API fails
-     */
-    private void addFallbackCoffeeShops() {
-        Log.d(TAG, "Adding fallback coffee shop markers");
-        showToast("Using sample coffee shop locations", Toast.LENGTH_LONG);
-        
-        // Clear any existing markers
-        markerTitleById.clear();
-        totalCoffeeShopsAdded = 0;
-        
-        // Center point for our fallbacks - use user location if available, otherwise default
-        double centerLat = (lastKnownLocation != null) ? lastKnownLocation.getLatitude() : 37.4220;
-        double centerLng = (lastKnownLocation != null) ? lastKnownLocation.getLongitude() : -122.0841;
-        
-        // Move camera to this location
-        mapProvider.moveCamera(centerLat, centerLng, 14);
-        
-        // Add sample coffee shops around the center
-        addSampleCoffeeShop("JavaW8 Coffee House", 
-                centerLat + 0.003, centerLng + 0.003,
-                "123 Coffee Lane", "555-123-4567", 4.8f);
-        
-        addSampleCoffeeShop("Brew & Bean", 
-                centerLat - 0.002, centerLng + 0.001,
-                "456 Espresso Ave", "555-987-6543", 4.5f);
-        
-        addSampleCoffeeShop("Caffeine Corner", 
-                centerLat + 0.001, centerLng - 0.002,
-                "789 Latte Blvd", "555-246-1357", 4.2f);
-        
-        addSampleCoffeeShop("Mobile Mocha", 
-                centerLat - 0.001, centerLng - 0.001,
-                "321 Android St", "555-369-8521", 4.7f);
-    }
-    
-    /**
-     * Add a sample coffee shop marker with the specified details
-     */
-    private void addSampleCoffeeShop(String name, double lat, double lng, 
-                                    String address, String phone, float rating) {
-        // Create a place info object for this sample coffee shop
-        PlaceInfo place = new PlaceInfo(
-            "sample_" + name.replace(" ", "_").toLowerCase(),
-            name,
-            lat,
-            lng,
-            address,
-            phone,
-            rating,
-            true // This is sample data
-        );
-        
-        // Add a marker for this place
-        addPlaceMarker(place);
-    }
+    // Removed fallback methods - only using real data
 }
